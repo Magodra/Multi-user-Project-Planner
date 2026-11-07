@@ -26,7 +26,7 @@ import {
   sortById,
   validateFilter,
 } from "../StorageAdapter.js";
-import { AsyncMutex, withLockFile } from "./locks.js";
+import { AsyncMutex, retryWhileBusy, withLockFile } from "./locks.js";
 
 type Layout =
   | { scope: "self" }
@@ -228,9 +228,10 @@ export class FileAdapter implements StorageAdapter {
       await Promise.all(staged.map(([tmp]) => rm(tmp, { force: true })));
       throw err;
     }
-    for (const [tmp, target] of staged) await renameWithRetry(tmp, target);
+    for (const [tmp, target] of staged)
+      await retryWhileBusy(() => rename(tmp, target), BUSY_WAIT_MS);
     for (const [file, content] of buffer.files) {
-      if (content === null) await rm(file, { force: true });
+      if (content === null) await retryWhileBusy(() => rm(file, { force: true }), BUSY_WAIT_MS);
     }
     for (const [file, lines] of buffer.appends) {
       await mkdir(path.dirname(file), { recursive: true });
@@ -382,21 +383,10 @@ function requireProjectId(type: EntityType, entity: object): string {
   return projectId;
 }
 
+/** Windows (and sync tools like Dropbox) can briefly hold files open. */
+const BUSY_WAIT_MS = 5_000;
+
 /** Ids become file names, so they must not contain path syntax. */
 function assertSafeId(id: string): void {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new ValidationError(`Invalid id '${id}'`);
-}
-
-/** Windows (and sync tools like Dropbox) can briefly hold files open. */
-async function renameWithRetry(from: string, to: string): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await rename(from, to);
-      return;
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (attempt >= 10 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw err;
-      await new Promise((r) => setTimeout(r, 20 * (attempt + 1)));
-    }
-  }
 }
