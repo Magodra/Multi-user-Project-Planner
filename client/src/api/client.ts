@@ -39,6 +39,7 @@ import type {
   ReferenceTarget,
   PublicUser,
   ReorderTaskInput,
+  ChangeTaskLevelInput,
   ReportDefinition,
   ReportDefinitionInput,
   RoleAssignment,
@@ -168,6 +169,8 @@ export const api = {
     move: (id: string, input: MoveTaskInput) => post<Task>(`/api/items/${enc(id)}/move`, input),
     reorder: (id: string, input: ReorderTaskInput) =>
       post<Task>(`/api/items/${enc(id)}/reorder`, input),
+    changeLevel: (id: string, input: ChangeTaskLevelInput) =>
+      post<Task>(`/api/items/${enc(id)}/level`, input),
     setPredecessors: (id: string, input: SetPredecessorsInput) =>
       put<Dependency[]>(`/api/items/${enc(id)}/predecessors`, input),
     delete: (id: string, version: number) => del(`/api/items/${enc(id)}?version=${version}`),
@@ -182,6 +185,8 @@ export const api = {
       post<PlanItemReference>(`/api/references/${enc(id)}/move`, input),
     reorderReference: (id: string, input: ReorderTaskInput) =>
       post<PlanItemReference>(`/api/references/${enc(id)}/reorder`, input),
+    changeReferenceLevel: (id: string, input: ChangeTaskLevelInput) =>
+      post<PlanItemReference>(`/api/references/${enc(id)}/level`, input),
     proposeTaskChange: (id: string, input: Partial<ProposeTaskChangeInput>) =>
       post<ChangeRequestWithApprovals>(`/api/references/${enc(id)}/propose`, input),
     createDependency: (input: CreateDependencyInput) =>

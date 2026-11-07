@@ -158,6 +158,15 @@ export const reorderTaskInput = z.object({
   direction: z.enum(["up", "down"]),
 });
 
+/**
+ * Indent: make a task (or reference) a subtask of the task above it.
+ * Outdent: move it up one level, right after its current parent.
+ */
+export const changeTaskLevelInput = z.object({
+  version: z.number().int(),
+  direction: z.enum(["indent", "outdent"]),
+});
+
 export const createBaselineInput = z.object({
   planId: id,
   name: z.string().min(1),
@@ -284,6 +293,7 @@ export type SetReferenceTypeInput = z.infer<typeof setReferenceTypeInput>;
 export type CreateDependencyInput = z.infer<typeof createDependencyInput>;
 export type SetPredecessorsInput = z.infer<typeof setPredecessorsInput>;
 export type ReorderTaskInput = z.infer<typeof reorderTaskInput>;
+export type ChangeTaskLevelInput = z.infer<typeof changeTaskLevelInput>;
 export type MoveReferenceInput = z.infer<typeof moveReferenceInput>;
 export type ProposeTaskChangeInput = z.infer<typeof proposeTaskChangeInput>;
 export type CreateBaselineInput = z.infer<typeof createBaselineInput>;

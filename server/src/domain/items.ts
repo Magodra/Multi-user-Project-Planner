@@ -8,6 +8,7 @@ import {
   scheduleFromRange,
   spanOf,
 } from "@planning/shared";
+import { compareTaskOrder } from "./dependencies.js";
 import { RuleViolationError } from "./errors.js";
 
 export { getItemKind };
@@ -111,4 +112,64 @@ export function rollUpActivities(
     }
   }
   return changed;
+}
+
+/** A row in a plan's hierarchy: an own task, or a reference to another plan's task. */
+export interface HierarchyNode {
+  id: string;
+  parentId: string | null;
+  sortOrder: number;
+  name: string;
+  /** False for a reference: subtasks can only be placed under the plan's own tasks. */
+  canHaveSubtasks: boolean;
+}
+
+export interface LevelChange {
+  parentId: string | null;
+  /** New sortOrders, including the moved node's. */
+  sortOrders: Map<string, number>;
+}
+
+/**
+ * Indent: the node becomes the last subtask of the sibling above it.
+ * Outdent: the node moves up one level and is placed right after its old
+ * parent; the siblings it leaves stay where they are.
+ */
+export function changeLevel(
+  nodes: readonly HierarchyNode[],
+  movedId: string,
+  direction: "indent" | "outdent",
+): LevelChange {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const moved = byId.get(movedId);
+  if (!moved) throw new RuleViolationError("The task is not in this plan");
+  const childrenOf = (parentId: string | null) =>
+    nodes.filter((n) => n.parentId === parentId && n.id !== movedId).sort(compareTaskOrder);
+
+  if (direction === "indent") {
+    const siblings = nodes.filter((n) => n.parentId === moved.parentId).sort(compareTaskOrder);
+    const above = siblings[siblings.indexOf(moved) - 1];
+    if (!above)
+      throw new RuleViolationError(
+        `There is no task above '${moved.name}' to make it a subtask of`,
+      );
+    if (!above.canHaveSubtasks)
+      throw new RuleViolationError(
+        `'${above.name}' is a task from another plan and cannot have subtasks here`,
+      );
+    const last = childrenOf(above.id).reduce((max, n) => Math.max(max, n.sortOrder), -1);
+    return { parentId: above.id, sortOrders: new Map([[movedId, last + 1]]) };
+  }
+
+  if (moved.parentId === null)
+    throw new RuleViolationError(`'${moved.name}' is already at the top level`);
+  const parent = byId.get(moved.parentId);
+  if (!parent) throw new RuleViolationError("The task's parent is not in this plan");
+  const ordered = childrenOf(parent.parentId);
+  ordered.splice(ordered.indexOf(parent) + 1, 0, moved);
+  const sortOrders = new Map<string, number>();
+  ordered.forEach((n, i) => {
+    if (n.id === movedId || n.sortOrder !== i) sortOrders.set(n.id, i);
+  });
+  return { parentId: parent.parentId, sortOrders };
 }

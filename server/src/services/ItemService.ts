@@ -1,5 +1,6 @@
 import {
   type AddReferenceInput,
+  type ChangeTaskLevelInput,
   type CreateDependencyInput,
   type CreateTaskInput,
   type Dependency,
@@ -29,10 +30,13 @@ import { ConflictError, RuleViolationError, ValidationError } from "../domain/er
 import { assertSameProjectTree, rootProjectId } from "../domain/projects.js";
 import { normalizeReference } from "../domain/references.js";
 import {
+  type HierarchyNode,
+  type LevelChange,
   applyScheduleChange,
   assertCanAddSubtask,
   assertNoCycle,
   assertScheduleEditable,
+  changeLevel,
 } from "../domain/items.js";
 import type { StorageAdapter } from "../storage/StorageAdapter.js";
 import type { AccessService } from "./AccessService.js";
@@ -463,6 +467,85 @@ export class ItemService {
     return saved;
   }
 
+  /**
+   * Indent a task (make it a subtask of the task above it) or outdent it (one
+   * level up, right after its parent). Like a move in the hierarchy, it
+   * changes the activities' rolled-up dates.
+   */
+  async changeLevel(
+    ctx: ServiceContext,
+    itemId: string,
+    input: ChangeTaskLevelInput,
+  ): Promise<Task> {
+    const existing = await mustGet(this.storage, "task", itemId);
+    await this.access.require(ctx, existing.projectId, existing.planId, "plan.edit");
+    const saved = await this.storage.transaction(async (tx) => {
+      const task = await mustGet(tx, "task", itemId);
+      if (task.version !== input.version)
+        throw new ConflictError("Task was changed by someone else");
+      const change = await this.applyLevelChange(
+        tx,
+        ctx,
+        task.projectId,
+        task.planId,
+        task.id,
+        task.id,
+        input.direction,
+      );
+      const project = await mustGet(tx, "project", task.projectId);
+      const updated = touch(task, ctx, {
+        parentId: change.parentId,
+        sortOrder: change.sortOrders.get(task.id)!,
+      });
+      await this.afterChange(tx, ctx, task, updated, project.calendar, input.direction, {
+        parentId: change.parentId,
+      });
+      return mustGet(tx, "task", itemId);
+    });
+    this.events.emit(await this.eventFor(saved, input.direction, existing));
+    return saved;
+  }
+
+  /** Indent or outdent an external task among the local tasks of the plan using it. */
+  async changeReferenceLevel(
+    ctx: ServiceContext,
+    referenceId: string,
+    input: ChangeTaskLevelInput,
+  ): Promise<PlanItemReference> {
+    const existing = await mustGet(this.storage, "planItemReference", referenceId);
+    await this.access.require(ctx, existing.projectId, existing.planId, "plan.edit");
+    const saved = await this.storage.transaction(async (tx) => {
+      const ref = normalizeReference(await mustGet(tx, "planItemReference", referenceId));
+      if (ref.version !== input.version)
+        throw new ConflictError("Reference was changed by someone else");
+      const change = await this.applyLevelChange(
+        tx,
+        ctx,
+        ref.projectId,
+        ref.planId,
+        ref.id,
+        ref.itemId,
+        input.direction,
+      );
+      const updated = await tx.save(
+        "planItemReference",
+        touch(ref, ctx, { parentId: change.parentId, sortOrder: change.sortOrders.get(ref.id)! }),
+      );
+      const project = await mustGet(tx, "project", ref.projectId);
+      await rollUpPlan(tx, ref.projectId, ref.planId, project.calendar);
+      await this.audit.record(tx, ctx, {
+        projectId: ref.projectId,
+        entityType: "planItemReference",
+        entityId: ref.id,
+        action: input.direction,
+        details: { parentId: change.parentId },
+      });
+      return updated;
+    });
+    this.emitReference(saved, input.direction);
+    return saved;
+  }
+
   // --- dependencies --------------------------------------------------------
 
   /**
@@ -708,6 +791,105 @@ export class ItemService {
       if (sortOrder !== undefined) await tx.save("planItemReference", touch(r, ctx, { sortOrder }));
     }
     return changes;
+  }
+
+  /**
+   * Works out an indent/outdent in a plan (tasks and references share one
+   * hierarchy), checks it and saves the siblings' new sortOrders. The moved
+   * task or reference itself is saved by the caller.
+   */
+  private async applyLevelChange(
+    tx: StorageAdapter,
+    ctx: ServiceContext,
+    projectId: string,
+    planId: string,
+    movedId: string,
+    movedItemId: string,
+    direction: "indent" | "outdent",
+  ): Promise<LevelChange> {
+    const tasks = await tx.query("task", { projectId, planId });
+    const refs = (await tx.query("planItemReference", { projectId, planId })).map(
+      normalizeReference,
+    );
+    const taskIds = new Set(tasks.map((t) => t.id));
+    const nodes: HierarchyNode[] = tasks.map((t) => ({
+      id: t.id,
+      parentId: t.parentId,
+      sortOrder: t.sortOrder,
+      name: t.name,
+      canHaveSubtasks: true,
+    }));
+    for (const r of refs)
+      nodes.push({
+        id: r.id,
+        // A reference under a task that is gone is shown at the top level.
+        parentId: r.parentId !== null && taskIds.has(r.parentId) ? r.parentId : null,
+        sortOrder: r.sortOrder,
+        name: (await tx.get("task", r.itemId))?.name ?? "",
+        canHaveSubtasks: false,
+      });
+    const change = changeLevel(nodes, movedId, direction);
+    if (change.parentId !== null) {
+      const parent = tasks.find((t) => t.id === change.parentId)!;
+      assertCanAddSubtask(parent, new Array<unknown>(await childCount(tx, parent)));
+    }
+    await this.assertLinksAllowParent(
+      tx,
+      await mustGet(tx, "plan", planId),
+      movedItemId,
+      change.parentId,
+    );
+    for (const t of tasks) {
+      const sortOrder = change.sortOrders.get(t.id);
+      if (t.id !== movedId && sortOrder !== undefined)
+        await tx.save("task", touch(t, ctx, { sortOrder }));
+    }
+    for (const r of refs) {
+      const sortOrder = change.sortOrders.get(r.id);
+      if (r.id !== movedId && sortOrder !== undefined)
+        await tx.save("planItemReference", touch(r, ctx, { sortOrder }));
+    }
+    return change;
+  }
+
+  /**
+   * A task cannot be linked to its own activity or subtasks, so a task linked
+   * to the task above it cannot become its subtask (and likewise for outdents
+   * that would place it under a task it is linked to).
+   */
+  private async assertLinksAllowParent(
+    tx: StorageAdapter,
+    plan: Plan,
+    itemId: string,
+    parentId: string | null,
+  ): Promise<void> {
+    const rows = await this.planRows(tx, plan);
+    const moved = rows.get(itemId);
+    if (!moved) return;
+    rows.set(itemId, { ...moved, parentId });
+    const subtree = new Set([itemId]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const r of rows.values())
+        if (r.parentId !== null && subtree.has(r.parentId) && !subtree.has(r.id)) {
+          subtree.add(r.id);
+          grew = true;
+        }
+    }
+    for (const d of await this.dependenciesAround(tx, plan, rows)) {
+      const from = rows.get(d.fromItemId);
+      const to = rows.get(d.toItemId);
+      if (!from || !to || (!subtree.has(from.id) && !subtree.has(to.id))) continue;
+      try {
+        assertNotOwnActivity(from, to, rows);
+      } catch (err) {
+        if (!(err instanceof RuleViolationError)) throw err;
+        throw new RuleViolationError(
+          `'${moved.name}' cannot be placed there: '${from.name}' and '${to.name}' are linked, ` +
+            "and a task cannot be linked to its own activity. Remove the dependency first.",
+        );
+      }
+    }
   }
 
   private emitReference(ref: PlanItemReference, action: string): void {

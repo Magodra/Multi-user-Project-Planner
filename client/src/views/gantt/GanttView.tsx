@@ -353,6 +353,27 @@ export function GanttView({ planId }: { planId: string }) {
   const siblings = selectedRow ? siblingsOf(rows, selectedRow) : [];
   const position = selectedRow ? siblings.indexOf(selectedRow) : -1;
 
+  // Indent: subtask of the row above (an own task that is not a milestone). Outdent: one level up.
+  const changeLevel = (direction: "indent" | "outdent") => {
+    if (!selectedRow) return;
+    const done =
+      selectedRow.type === "task"
+        ? api.items.changeLevel(selectedRow.task.id, {
+            version: selectedRow.task.version,
+            direction,
+          })
+        : api.items.changeReferenceLevel(selectedRow.reference.id, {
+            version: selectedRow.reference.version,
+            direction,
+          });
+    done
+      .then(() => setActionError(null))
+      .catch((err: unknown) => setActionError(err instanceof Error ? err.message : String(err)));
+  };
+  const rowAbove = position > 0 ? siblings[position - 1] : undefined;
+  const canIndent = rowAbove?.type === "task" && view?.kinds[rowAbove.task.id] !== "milestone";
+  const canOutdent = (selectedRow?.depth ?? 0) > 0;
+
   // Deletes the selected task; an external task is only removed from this plan.
   const deleteSelected = () => {
     if (!selectedRow) return;
@@ -413,6 +434,24 @@ export function GanttView({ planId }: { planId: string }) {
               onClick={() => reorder("down")}
             >
               ↓
+            </button>
+            <button
+              type="button"
+              aria-label="Outdent task"
+              title="Outdent: move the selected task up one level"
+              disabled={!canOutdent}
+              onClick={() => changeLevel("outdent")}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              aria-label="Indent task"
+              title="Indent: make the selected task a subtask of the task above"
+              disabled={!canIndent}
+              onClick={() => changeLevel("indent")}
+            >
+              →
             </button>
           </span>
         )}

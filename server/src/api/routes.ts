@@ -19,6 +19,7 @@ import {
   moveTaskInput,
   proposeTaskChangeInput,
   reorderTaskInput,
+  changeTaskLevelInput,
   reportDefinitionInput,
   runReportInput,
   saveWorkspaceInput,
@@ -211,6 +212,13 @@ export function apiRoutes(s: Services): Router {
         await s.items.reorder(ctxOf(req), p(req, "id"), reorderTaskInput.parse(req.body)),
       ),
   );
+  r.post(
+    "/items/:id/level",
+    async (req, res) =>
+      void res.json(
+        await s.items.changeLevel(ctxOf(req), p(req, "id"), changeTaskLevelInput.parse(req.body)),
+      ),
+  );
   r.put(
     "/items/:id/predecessors",
     async (req, res) =>
@@ -269,6 +277,17 @@ export function apiRoutes(s: Services): Router {
     async (req, res) =>
       void res.json(
         await s.items.reorderReference(ctxOf(req), p(req, "id"), reorderTaskInput.parse(req.body)),
+      ),
+  );
+  r.post(
+    "/references/:id/level",
+    async (req, res) =>
+      void res.json(
+        await s.items.changeReferenceLevel(
+          ctxOf(req),
+          p(req, "id"),
+          changeTaskLevelInput.parse(req.body),
+        ),
       ),
   );
   r.post(

@@ -324,6 +324,58 @@ describe.each(serviceBackends)("services on $name", (backend) => {
       expect((await f.task("Three")).taskNumber).toBe(3);
     });
 
+    it("indents a task under the task above and outdents it back after its parent", async () => {
+      const a = await f.task("A");
+      const b = await f.task("B");
+      await f.task("C");
+      const level = async (id: string, direction: "indent" | "outdent") =>
+        f.services.items.changeLevel(f.alice, id, {
+          version: (await f.services.items.get(f.alice, id)).version,
+          direction,
+        });
+      const topLevel = async () =>
+        (await f.services.plans.getView(f.alice, f.planA.id)).items
+          .filter((t) => t.parentId === null)
+          .sort((x, y) => x.sortOrder - y.sortOrder)
+          .map((t) => t.name);
+
+      expect((await level(b.id, "indent")).parentId).toBe(a.id);
+      const view = await f.services.plans.getView(f.alice, f.planA.id);
+      expect(view.kinds[a.id]).toBe("activity");
+      expect(await topLevel()).toEqual(["A", "C"]);
+
+      expect((await level(b.id, "outdent")).parentId).toBeNull();
+      expect(await topLevel()).toEqual(["A", "B", "C"]);
+      expect((await f.services.plans.getView(f.alice, f.planA.id)).kinds[a.id]).toBe("task");
+
+      await expect(level(a.id, "indent")).rejects.toBeInstanceOf(RuleViolationError);
+      await expect(level(a.id, "outdent")).rejects.toBeInstanceOf(RuleViolationError);
+    });
+
+    it("refuses to indent under a milestone or under a task it is linked to", async () => {
+      await f.task("Gate", { duration: 0 });
+      const after = await f.task("After");
+      await expect(
+        f.services.items.changeLevel(f.alice, after.id, {
+          version: after.version,
+          direction: "indent",
+        }),
+      ).rejects.toThrow(/milestone/);
+
+      const first = await f.task("First");
+      const second = await f.task("Second");
+      await f.services.items.setPredecessors(f.alice, second.id, {
+        predecessors: String(first.taskNumber),
+      });
+      const fresh = await f.services.items.get(f.alice, second.id);
+      await expect(
+        f.services.items.changeLevel(f.alice, second.id, {
+          version: fresh.version,
+          direction: "indent",
+        }),
+      ).rejects.toThrow(/linked/);
+    });
+
     it("moves tasks up and down among their siblings", async () => {
       const a = await f.task("A");
       const b = await f.task("B");
@@ -763,6 +815,34 @@ describe.each(serviceBackends)("services on $name", (backend) => {
       await expect(f.services.items.delete(f.bob, phase.id, fresh.version)).rejects.toBeInstanceOf(
         RuleViolationError,
       );
+    });
+
+    it("indents and outdents a reference among the plan's local tasks", async () => {
+      const phase = await f.task("Phase", { planId: f.planB.id });
+      const external = await f.task("Shared", { ownership: "EXTERNAL" });
+      const ref = await f.services.items.addReference(f.bob, {
+        itemId: external.id,
+        planId: f.planB.id,
+      });
+      const indented = await f.services.items.changeReferenceLevel(f.bob, ref.id, {
+        version: ref.version,
+        direction: "indent",
+      });
+      expect(indented.parentId).toBe(phase.id);
+      expect((await f.services.plans.getView(f.bob, f.planB.id)).kinds[phase.id]).toBe("activity");
+      const outdented = await f.services.items.changeReferenceLevel(f.bob, ref.id, {
+        version: indented.version,
+        direction: "outdent",
+      });
+      expect(outdented.parentId).toBeNull();
+      // Nothing can be placed under a reference.
+      const local = await f.task("Local", { planId: f.planB.id });
+      await expect(
+        f.services.items.changeLevel(f.bob, local.id, {
+          version: local.version,
+          direction: "indent",
+        }),
+      ).rejects.toThrow(/another plan/);
     });
 
     it("orders references together with local tasks and refuses milestone parents", async () => {

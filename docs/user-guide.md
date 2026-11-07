@@ -73,6 +73,7 @@ The Gantt chart shows a plan's tasks with their hierarchy, task IDs and predeces
 - **+ Task** adds a task. Double-click a bar or row to open the task dialog.
 - Drag a bar to move it; drag its end to change the duration.
 - Select a task and use ↑ / ↓ to move it among its siblings. The task's ID does not change.
+- Select a task and use → (indent) to make it a subtask of the task above it, or ← (outdent) to move it up one level, right after its current parent. This works for external tasks used in the plan too. A task cannot be indented under a milestone, under an external task, or under a task it is linked to by a dependency.
 - Select a task and use the delete button to remove it, after confirmation.
 
 The task dialog sets the task's:

@@ -15,6 +15,7 @@ import {
   moveTaskInput,
   proposeTaskChangeInput,
   reorderTaskInput,
+  changeTaskLevelInput,
   runReportInput,
   setPredecessorsInput,
   updateTaskInput,
@@ -31,6 +32,7 @@ export const MCP_TOOL_NAMES = [
   "update_task",
   "move_task",
   "reorder_task",
+  "change_task_level",
   "set_predecessors",
   "propose_task_change",
   "create_baseline",
@@ -143,6 +145,18 @@ export function createMcpServer(services: Services, ctx: ServiceContext): McpSer
     },
     ({ itemId, ...rest }) =>
       run(() => services.items.reorder(ctx, itemId, reorderTaskInput.parse(rest))),
+  );
+
+  server.registerTool(
+    "change_task_level",
+    {
+      title: "Indent or outdent task",
+      description:
+        "Indent a task (make it a subtask of the task above it) or outdent it (move it up one level, right after its parent).",
+      inputSchema: { itemId: id, ...changeTaskLevelInput.shape },
+    },
+    ({ itemId, ...rest }) =>
+      run(() => services.items.changeLevel(ctx, itemId, changeTaskLevelInput.parse(rest))),
   );
 
   server.registerTool(

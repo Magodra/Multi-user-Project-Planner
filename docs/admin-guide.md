@@ -209,7 +209,7 @@ With `mcp.enabled` (the default), the server exposes a Model Context Protocol en
 - **Authentication:** with OAuth 2.1 (below), or with a bearer token from `POST /api/auth/login`.
 - **Tools:**
   - list projects and plans; read plan tasks;
-  - create, update, move and reorder tasks; set predecessors;
+  - create, update, move, reorder, indent and outdent tasks; set predecessors;
   - propose changes to external tasks;
   - create and compare baselines; create change requests;
   - list pending approvals; run reports.

@@ -28,6 +28,8 @@ import {
   assertCanAddSubtask,
   assertNoCycle,
   assertScheduleEditable,
+  changeLevel,
+  type HierarchyNode,
   rollUpActivities,
 } from "./items.js";
 import {
@@ -412,6 +414,54 @@ describe("project hierarchy", () => {
 });
 
 describe("task order, numbers and dependencies", () => {
+  describe("indent and outdent", () => {
+    const node = (
+      id: string,
+      parentId: string | null,
+      sortOrder: number,
+      canHaveSubtasks = true,
+    ): HierarchyNode => ({ id, parentId, sortOrder, name: id.toUpperCase(), canHaveSubtasks });
+    // A, B (with B1, B2), C (a reference), D
+    const nodes = [
+      node("a", null, 0),
+      node("b", null, 1),
+      node("b1", "b", 0),
+      node("b2", "b", 1),
+      node("c", null, 2, false),
+      node("d", null, 3),
+    ];
+
+    it("indents under the task above, as its last subtask", () => {
+      expect(changeLevel(nodes, "b", "indent")).toEqual({
+        parentId: "a",
+        sortOrders: new Map([["b", 0]]),
+      });
+      expect(changeLevel(nodes, "c", "indent")).toEqual({
+        parentId: "b",
+        sortOrders: new Map([["c", 2]]),
+      });
+      expect(changeLevel(nodes, "b2", "indent").parentId).toBe("b1");
+    });
+
+    it("refuses to indent the first sibling or under a reference", () => {
+      expect(() => changeLevel(nodes, "a", "indent")).toThrow(RuleViolationError);
+      expect(() => changeLevel(nodes, "b1", "indent")).toThrow(RuleViolationError);
+      expect(() => changeLevel(nodes, "d", "indent")).toThrow(/another plan/);
+    });
+
+    it("outdents to right after the old parent and renumbers the new siblings", () => {
+      expect(changeLevel(nodes, "b1", "outdent")).toEqual({
+        parentId: null,
+        sortOrders: new Map([
+          ["b1", 2],
+          ["c", 3],
+          ["d", 4],
+        ]),
+      });
+      expect(() => changeLevel(nodes, "a", "outdent")).toThrow(/top level/);
+    });
+  });
+
   it("moves a task among its siblings and renumbers them", () => {
     const siblings = [
       task("a", { sortOrder: 0 }),
