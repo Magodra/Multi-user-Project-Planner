@@ -11,6 +11,34 @@ import {
   type ReactNode,
 } from "react";
 
+/** Tab strip of a dialog; the caller shows the selected tab's content. */
+export function DialogTabs<T extends string>({
+  tabs,
+  selected,
+  onSelect,
+}: {
+  tabs: { id: T; label: string }[];
+  selected: T;
+  onSelect(tab: T): void;
+}) {
+  return (
+    <div className="pp-dialog-tabs" role="tablist">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={t.id === selected}
+          className={t.id === selected ? "pp-tab-selected" : undefined}
+          onClick={() => onSelect(t.id)}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Dialog({
   title,
   onClose,

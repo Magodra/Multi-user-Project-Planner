@@ -251,6 +251,10 @@ export function apiRoutes(s: Services): Router {
       void res.json(await s.changeRequests.pendingForItem(ctxOf(req), p(req, "id"))),
   );
   r.get(
+    "/items/:id/history",
+    async (req, res) => void res.json(await s.audit.taskHistory(ctxOf(req), p(req, "id"))),
+  );
+  r.get(
     "/items/:id/reference-targets",
     async (req, res) => void res.json(await s.items.referenceTargets(ctxOf(req), p(req, "id"))),
   );

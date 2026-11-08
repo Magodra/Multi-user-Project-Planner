@@ -17,10 +17,11 @@ import {
   toDateTimeInputValue,
 } from "@planning/shared";
 import { api } from "../../api/client";
-import { Dialog, ErrorText, Field, useAction } from "../../components/ui";
+import { Dialog, DialogTabs, ErrorText, Field, useAction } from "../../components/ui";
 import { TaskApprovals } from "../approvals/TaskApprovals";
 import { otherPlanPredecessors, predecessorText } from "./predecessors";
 import { PredecessorsField } from "./PredecessorsField";
+import { TASK_DIALOG_TABS, TaskAuditLog, type TaskDialogTab } from "./TaskAuditLog";
 
 interface Props {
   view: PlanView;
@@ -42,6 +43,7 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
   // Links to this external task are local to the plan (its own task IDs).
   const initialPredecessors = task ? predecessorText(view, task.id) : "";
   const [predecessors, setPredecessors] = useState(initialPredecessors);
+  const [tab, setTab] = useState<TaskDialogTab>("details");
   const { busy, error, run } = useAction();
   if (!ref || !task) return null;
 
@@ -145,80 +147,88 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
         </>
       }
     >
-      <p className="pp-hint">
-        {agreement
-          ? "AGREEMENT: changes are proposed to the task's owner and applied once approved."
-          : "MONITOR: this task follows its owner plan and cannot be changed here."}
-        {pending && " A change is waiting for approval."}
-      </p>
-      {!agreement && canManage && (
-        <p>
-          <button type="button" onClick={upgrade} disabled={busy}>
-            Upgrade to AGREEMENT
-          </button>
+      <DialogTabs<TaskDialogTab> tabs={TASK_DIALOG_TABS} selected={tab} onSelect={setTab} />
+      {tab === "audit" && <TaskAuditLog itemId={task.id} granularity={task.granularity} />}
+      <div hidden={tab !== "details"}>
+        <p className="pp-hint">
+          {agreement
+            ? "AGREEMENT: changes are proposed to the task's owner and applied once approved."
+            : "MONITOR: this task follows its owner plan and cannot be changed here."}
+          {pending && " A change is waiting for approval."}
         </p>
-      )}
-      {proposal && (
-        <p className="pp-hint pp-proposal-note">
-          Proposed: {proposal.proposed.name},{" "}
-          {formatForDisplay(proposal.proposed.start, proposal.proposed.granularity)},{" "}
-          {proposal.proposed.duration} {proposal.proposed.granularity}
-          {proposal.description && ` (${proposal.description})`}
-        </p>
-      )}
-      <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} disabled={!editable} />
-      </Field>
-      <div className="pp-row">
-        <Field label={granularity === "hours" ? "Start (UTC)" : "Start"}>{dateInput}</Field>
-        <Field label="Duration">
-          <input
-            type="number"
-            min={0}
-            step={granularity === "hours" ? 0.5 : 1}
-            value={duration}
-            onChange={(e) => setDuration(Number(e.target.value))}
-            disabled={!editable}
-          />
+        {!agreement && canManage && (
+          <p>
+            <button type="button" onClick={upgrade} disabled={busy}>
+              Upgrade to AGREEMENT
+            </button>
+          </p>
+        )}
+        {proposal && (
+          <p className="pp-hint pp-proposal-note">
+            Proposed: {proposal.proposed.name},{" "}
+            {formatForDisplay(proposal.proposed.start, proposal.proposed.granularity)},{" "}
+            {proposal.proposed.duration} {proposal.proposed.granularity}
+            {proposal.description && ` (${proposal.description})`}
+          </p>
+        )}
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} disabled={!editable} />
         </Field>
-        <Field label="Unit">
+        <div className="pp-row">
+          <Field label={granularity === "hours" ? "Start (UTC)" : "Start"}>{dateInput}</Field>
+          <Field label="Duration">
+            <input
+              type="number"
+              min={0}
+              step={granularity === "hours" ? 0.5 : 1}
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              disabled={!editable}
+            />
+          </Field>
+          <Field label="Unit">
+            <select
+              value={granularity}
+              onChange={(e) => setGranularity(e.target.value as Granularity)}
+              disabled={!editable}
+            >
+              {GRANULARITIES.map((g) => (
+                <option key={g}>{g}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        {editable && changed && (
+          <Field label="Reason for the change">
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </Field>
+        )}
+        <PredecessorsField
+          value={predecessors}
+          onChange={setPredecessors}
+          disabled={!canEdit}
+          otherPlanLinks={otherPlanPredecessors(view, task.id)}
+        />
+        <Field label="Parent in this plan">
           <select
-            value={granularity}
-            onChange={(e) => setGranularity(e.target.value as Granularity)}
-            disabled={!editable}
+            value={parentId ?? ""}
+            onChange={(e) => setParentId(e.target.value || null)}
+            disabled={!canEdit}
           >
-            {GRANULARITIES.map((g) => (
-              <option key={g}>{g}</option>
+            <option value="">(top level)</option>
+            {parents.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.taskNumber} {p.name}
+              </option>
             ))}
           </select>
         </Field>
+        <TaskApprovals itemId={task.id} />
       </div>
-      {editable && changed && (
-        <Field label="Reason for the change">
-          <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
-        </Field>
-      )}
-      <PredecessorsField
-        value={predecessors}
-        onChange={setPredecessors}
-        disabled={!canEdit}
-        otherPlanLinks={otherPlanPredecessors(view, task.id)}
-      />
-      <Field label="Parent in this plan">
-        <select
-          value={parentId ?? ""}
-          onChange={(e) => setParentId(e.target.value || null)}
-          disabled={!canEdit}
-        >
-          <option value="">(top level)</option>
-          {parents.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.taskNumber} {p.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-      <TaskApprovals itemId={task.id} />
       <ErrorText error={error} />
     </Dialog>
   );

@@ -1,5 +1,6 @@
 import {
   type AddReferenceInput,
+  type ChangeRequestWithApprovals,
   type ChangeTaskLevelInput,
   type CreateDependencyInput,
   type CreateTaskInput,
@@ -10,6 +11,7 @@ import {
   type PlanItemReference,
   type ReferenceTarget,
   type ReorderTaskInput,
+  type Schedule,
   type SetPredecessorsInput,
   type Task,
   type UpdateTaskInput,
@@ -37,18 +39,23 @@ import {
   assertNoCycle,
   assertScheduleEditable,
   changeLevel,
+  scheduleDiffers,
 } from "../domain/items.js";
 import type { StorageAdapter } from "../storage/StorageAdapter.js";
 import type { AccessService } from "./AccessService.js";
 import type { AuditService } from "./AuditService.js";
+import type { AgreementUse } from "../domain/approvals.js";
 import { type ChangeEvent, type EventBus, perProject } from "./events.js";
 import { type ServiceContext, mustGet, newMeta, touch } from "./support.js";
 import {
+  agreementUses,
   childCount,
+  proposeOwnerScheduleChange,
   rollUpPlan,
   saveTaskChange,
   setReferenceLinkType,
   supersedeOpenRequests,
+  supersedeOwnerProposals,
   taskChangeAudience,
 } from "./workflow.js";
 
@@ -139,18 +146,49 @@ export class ItemService {
         if (refs.length > 0)
           throw new RuleViolationError("Task is used in other plans and must stay external");
       }
-      const schedule = scheduleTouched ? applyScheduleChange(task, input, project.calendar) : {};
+      const { version: _version, reason, ...changes } = input;
+      const schedule = scheduleTouched ? applyScheduleChange(task, input, project.calendar) : null;
+      const scheduleChanged = schedule !== null && scheduleDiffers(task, schedule);
+      // Under AGREEMENT the plans using the task decide on a new schedule.
+      const uses = scheduleChanged ? await agreementUses(tx, task) : [];
+      const applySchedule = scheduleChanged && uses.length === 0;
       const updated = touch(task, ctx, {
         ...(input.name !== undefined && { name: input.name }),
         ...(input.notes !== undefined && { notes: input.notes }),
         ...(input.ownership !== undefined && { ownership: input.ownership }),
-        ...schedule,
+        ...(applySchedule && schedule),
       });
-      await this.afterChange(tx, ctx, task, updated, project.calendar, "update", input);
-      return mustGet(tx, "task", itemId);
+      const fieldsChanged =
+        updated.name !== task.name ||
+        updated.notes !== task.notes ||
+        updated.ownership !== task.ownership;
+      if (fieldsChanged || applySchedule)
+        await this.afterChange(
+          tx,
+          ctx,
+          task,
+          updated,
+          project.calendar,
+          "update",
+          uses.length > 0 ? { name: input.name, notes: input.notes } : changes,
+        );
+      const proposal =
+        uses.length > 0
+          ? await proposeOwnerScheduleChange(
+              tx,
+              ctx,
+              this.audit,
+              await mustGet(tx, "task", itemId),
+              schedule!,
+              uses,
+              reason ?? "",
+            )
+          : null;
+      return { task: await mustGet(tx, "task", itemId), proposal };
     });
-    this.events.emit(await this.eventFor(saved, "update"));
-    return saved;
+    this.events.emit(await this.eventFor(saved.task, "update"));
+    this.emitProposal(saved.proposal);
+    return saved.task;
   }
 
   /** Move in time (keeping the duration) and/or in the hierarchy. Moving an activity moves its subtasks. */
@@ -165,7 +203,10 @@ export class ItemService {
       const planTasks = await tx.query("task", { projectId: task.projectId, planId: task.planId });
       const byId = new Map(planTasks.map((t) => [t.id, t]));
       let updated = touch(task, ctx);
+      let hierarchyChanged = input.sortOrder !== undefined;
+      let proposal: { schedule: Schedule; uses: AgreementUse[] } | null = null;
       if (input.parentId !== undefined && input.parentId !== task.parentId) {
+        hierarchyChanged = true;
         if (input.parentId !== null) {
           const parent = byId.get(input.parentId);
           if (!parent) throw new ValidationError("New parent must be in the same plan");
@@ -178,9 +219,15 @@ export class ItemService {
         updated.parentId = input.parentId;
       }
       if (input.sortOrder !== undefined) updated.sortOrder = input.sortOrder;
-      if (input.start !== undefined) {
+      if (input.start !== undefined && input.start !== task.start) {
         const descendants = collectDescendants(task.id, planTasks);
         if (descendants.length > 0) {
+          for (const moved of [task, ...descendants]) {
+            if ((await agreementUses(tx, moved)).length > 0)
+              throw new RuleViolationError(
+                `'${moved.name}' is used under AGREEMENT: move its tasks one by one, so they can be approved`,
+              );
+          }
           // Shift every leaf by the same calendar offset; the activity follows by roll-up.
           const offsetDays = calendarDaysBetween(task.start, input.start);
           for (const d of descendants.filter((x) => !planTasks.some((t) => t.parentId === x.id))) {
@@ -191,17 +238,43 @@ export class ItemService {
             );
           }
         } else {
-          updated = {
-            ...updated,
-            ...makeSchedule(input.start, task.duration, task.granularity, project.calendar),
-          };
+          const schedule = makeSchedule(
+            input.start,
+            task.duration,
+            task.granularity,
+            project.calendar,
+          );
+          const uses = await agreementUses(tx, task);
+          if (uses.length > 0) proposal = { schedule, uses };
+          else updated = { ...updated, ...schedule };
         }
       }
-      await this.afterChange(tx, ctx, task, updated, project.calendar, "move", input);
-      return mustGet(tx, "task", itemId);
+      if (proposal === null || hierarchyChanged)
+        await this.afterChange(
+          tx,
+          ctx,
+          task,
+          updated,
+          project.calendar,
+          "move",
+          proposal ? { parentId: input.parentId, sortOrder: input.sortOrder } : input,
+        );
+      const created = proposal
+        ? await proposeOwnerScheduleChange(
+            tx,
+            ctx,
+            this.audit,
+            await mustGet(tx, "task", itemId),
+            proposal.schedule,
+            proposal.uses,
+            "",
+          )
+        : null;
+      return { task: await mustGet(tx, "task", itemId), proposal: created };
     });
-    this.events.emit(await this.eventFor(saved, "move", existing));
-    return saved;
+    this.events.emit(await this.eventFor(saved.task, "move", existing));
+    this.emitProposal(saved.proposal);
+    return saved.task;
   }
 
   /** Move a task one place up or down among its siblings. A no-op at either end. */
@@ -359,7 +432,10 @@ export class ItemService {
     const ref = await mustGet(this.storage, "planItemReference", referenceId);
     await this.access.require(ctx, ref.projectId, ref.planId, "plan.edit");
     await this.storage.transaction(async (tx) => {
-      for (const link of await tx.query("planLink", { projectId: ref.projectId, referenceId })) {
+      const links = await tx.query("planLink", { projectId: ref.projectId, referenceId });
+      if (links.some((link) => link.type === "AGREEMENT"))
+        await supersedeOwnerProposals(tx, ctx, this.audit, await mustGet(tx, "task", ref.itemId));
+      for (const link of links) {
         await tx.delete("planLink", link.id, link.version);
       }
       // The plan's dependencies on the task go with it.
@@ -720,6 +796,20 @@ export class ItemService {
   }
 
   // --- helpers -------------------------------------------------------------
+
+  /** Tell the owner plan and the deciding plans about a new proposal. */
+  private emitProposal(proposal: ChangeRequestWithApprovals | null): void {
+    if (!proposal) return;
+    const { changeRequest: cr, approvals } = proposal;
+    this.events.emit(
+      perProject([cr.projectId, ...approvals.map((a) => a.projectId)], {
+        entityType: "changeRequest",
+        entityId: cr.id,
+        action: "create",
+        planIds: [...new Set([cr.planId, ...approvals.map((a) => a.planId)])],
+      }),
+    );
+  }
 
   /** Save a changed item, reset a REJECTED state, supersede open requests and roll up. */
   private async afterChange(

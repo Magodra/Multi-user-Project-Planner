@@ -119,7 +119,7 @@ export function createMcpServer(services: Services, ctx: ServiceContext): McpSer
     {
       title: "Update task",
       description:
-        "Update a task's name, notes, schedule or ownership. Requires the current version (optimistic locking).",
+        "Update a task's name, notes, schedule or ownership. Requires the current version (optimistic locking). A schedule change to a task used under AGREEMENT in other plans is not applied: it creates a change request those plans must approve.",
       inputSchema: { itemId: id, ...updateTaskInput.shape },
     },
     ({ itemId, ...rest }) =>
@@ -130,7 +130,8 @@ export function createMcpServer(services: Services, ctx: ServiceContext): McpSer
     "move_task",
     {
       title: "Move task",
-      description: "Move a task in time (keeping its duration) and/or in the hierarchy.",
+      description:
+        "Move a task in time (keeping its duration) and/or in the hierarchy. A move in time of a task used under AGREEMENT in other plans is not applied: it creates a change request those plans must approve.",
       inputSchema: { itemId: id, ...moveTaskInput.shape },
     },
     ({ itemId, ...rest }) => run(() => services.items.move(ctx, itemId, moveTaskInput.parse(rest))),

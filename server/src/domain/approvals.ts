@@ -93,6 +93,30 @@ export function requiredApprovals(ctx: ApprovalContext): RequiredApproval[] {
   );
 }
 
+/** A plan using a task under AGREEMENT, with the extra parties of its link. */
+export interface AgreementUse {
+  plan: Plan;
+  definition: BaselineDefinition;
+  partyIds: string[];
+}
+
+/**
+ * A schedule change to a task in its owner plan, when other plans use the task
+ * under AGREEMENT: each of those plans, and the extra parties on its link,
+ * must approve it, with the approvers of their Estimated definition.
+ */
+export function usingPlanApprovals(uses: AgreementUse[]): RequiredApproval[] {
+  return uses.flatMap(({ plan, definition, partyIds }) =>
+    [plan.ownerPartyId ?? null, ...partyIds].map((partyId) => ({
+      planId: plan.id,
+      partyId,
+      roles:
+        definition.approvers.length > 0 ? [...definition.approvers] : (["PLAN_OWNER"] as Role[]),
+      reason: "Uses the task under AGREEMENT",
+    })),
+  );
+}
+
 /** Check the number of covered items against the definition's acceptance granularity. */
 export function assertAcceptanceGranularity(
   granularity: AcceptanceGranularity,

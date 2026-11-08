@@ -5,22 +5,31 @@
  */
 import {
   type AgreementState,
+  type Approval,
   type ChangeRequest,
+  type ChangeRequestWithApprovals,
   type LinkType,
   type PlanItemReference,
   type PlanLink,
+  type Schedule,
   type Task,
   type WorkingCalendar,
   nowIso,
 } from "@planning/shared";
 import { mergeBaselineItems } from "../domain/baselines.js";
 import { type PlacedSchedule, rollUpActivities } from "../domain/items.js";
-import { carryOverAgreedValues, referencesUnderLink } from "../domain/links.js";
+import { type AgreementUse, usingPlanApprovals } from "../domain/approvals.js";
+import {
+  carryOverAgreedValues,
+  effectiveLinkType,
+  governingLink,
+  referencesUnderLink,
+} from "../domain/links.js";
 import { normalizeReference } from "../domain/references.js";
 import type { StorageAdapter } from "../storage/StorageAdapter.js";
 import type { AuditService } from "./AuditService.js";
-import { findTrackBaseline } from "./lookups.js";
-import { type ServiceContext, newMeta, touch } from "./support.js";
+import { findTrackBaseline, getDefinition } from "./lookups.js";
+import { type ServiceContext, mustGet, newMeta, touch } from "./support.js";
 
 /** The state an item falls back to when nothing is proposed or rejected. */
 export async function restingState(
@@ -149,6 +158,115 @@ export async function referencesOf(
   return (await tx.query("planItemReference", { itemId })).map(normalizeReference);
 }
 
+/** The plans using a task under AGREEMENT: its owner's schedule changes need their approval. */
+export async function agreementUses(tx: StorageAdapter, task: Task): Promise<AgreementUse[]> {
+  const uses: AgreementUse[] = [];
+  for (const ref of await referencesOf(tx, task.id)) {
+    const links = await tx.query("planLink", { projectId: ref.projectId });
+    if (effectiveLinkType(ref, links) !== "AGREEMENT") continue;
+    uses.push({
+      plan: await mustGet(tx, "plan", ref.planId),
+      definition: await getDefinition(tx, ref.projectId, "ESTIMATED"),
+      partyIds: governingLink(ref, links)?.partyIds ?? [],
+    });
+  }
+  return uses;
+}
+
+/**
+ * Propose a schedule change to a task from its owner plan, instead of applying
+ * it: the plans in `uses` decide, and the change is applied once they all
+ * approve. A newer proposal from the owner replaces the older one.
+ */
+export async function proposeOwnerScheduleChange(
+  tx: StorageAdapter,
+  ctx: ServiceContext,
+  audit: AuditService,
+  task: Task,
+  schedule: Schedule,
+  uses: AgreementUse[],
+  description: string,
+): Promise<ChangeRequestWithApprovals> {
+  await supersedeOwnerProposals(tx, ctx, audit, task);
+  const changeRequest: ChangeRequest = {
+    ...newMeta(ctx),
+    projectId: task.projectId,
+    planId: task.planId,
+    kind: "PROPOSE_TASK_CHANGE",
+    title: `Change: ${task.name}`,
+    description,
+    targetTrack: "ESTIMATED",
+    itemIds: [task.id],
+    sourceBaselineId: null,
+    proposed: [
+      {
+        itemId: task.id,
+        name: task.name,
+        parentId: task.parentId,
+        isReference: false,
+        ...schedule,
+      },
+    ],
+    status: "PENDING",
+    requestedBy: ctx.user.id,
+    origin: ctx.origin,
+    resolvedAt: null,
+  };
+  const saved = await tx.save("changeRequest", changeRequest);
+  const projectOf = new Map(uses.map((u) => [u.plan.id, u.plan.projectId]));
+  const approvals: Approval[] = [];
+  for (const required of usingPlanApprovals(uses)) {
+    approvals.push(
+      await tx.save("approval", {
+        ...newMeta(ctx),
+        // Stored with the deciding plan's project: its members see and decide it.
+        projectId: projectOf.get(required.planId) ?? task.projectId,
+        changeRequestId: changeRequest.id,
+        planId: required.planId,
+        partyId: required.partyId,
+        roles: required.roles,
+        reason: required.reason,
+        status: "PENDING",
+        decidedBy: null,
+        decidedAt: null,
+        comment: "",
+      }),
+    );
+  }
+  await audit.record(tx, ctx, {
+    projectId: task.projectId,
+    entityType: "changeRequest",
+    entityId: changeRequest.id,
+    action: "create",
+    details: {
+      kind: changeRequest.kind,
+      itemIds: changeRequest.itemIds,
+      approvals: approvals.length,
+    },
+  });
+  return { changeRequest: saved, approvals };
+}
+
+/**
+ * Supersede the owner's own open proposals on a task, also when a plan stops
+ * using it under AGREEMENT: its approval could then never be decided.
+ */
+export async function supersedeOwnerProposals(
+  tx: StorageAdapter,
+  ctx: ServiceContext,
+  audit: AuditService,
+  task: Task,
+): Promise<ChangeRequest[]> {
+  return supersedeOpenRequests(
+    tx,
+    ctx,
+    audit,
+    task.projectId,
+    [task.id],
+    (cr) => cr.kind === "PROPOSE_TASK_CHANGE" && cr.planId === task.planId,
+  );
+}
+
 /** Copy the owner's agreed values into the recipient's Agreed track where missing (CLAUDE.md §4). */
 export async function carryOverAgreed(tx: StorageAdapter, link: PlanLink): Promise<number> {
   const refs = referencesUnderLink(
@@ -188,6 +306,8 @@ export async function setReferenceLinkType(
   const [existing] = await tx.query("planLink", { projectId: ref.projectId, referenceId: ref.id });
   const parties = partyIds ?? existing?.partyIds ?? [];
   if (existing?.type === type && existing.partyIds.join() === parties.join()) return existing;
+  if (existing?.type === "AGREEMENT" && type === "MONITOR")
+    await supersedeOwnerProposals(tx, ctx, audit, await mustGet(tx, "task", ref.itemId));
   const link: PlanLink = existing
     ? await tx.save("planLink", touch(existing, ctx, { type, partyIds: parties }))
     : await tx.save("planLink", {

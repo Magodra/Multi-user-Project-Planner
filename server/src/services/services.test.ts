@@ -980,11 +980,204 @@ describe.each(serviceBackends)("services on $name", (backend) => {
       });
       await f.services.items.update(f.alice, external.id, {
         version: (await f.services.items.get(f.alice, external.id)).version,
-        duration: 6,
+        name: "Renamed by owner",
       });
       expect(
         (await f.services.changeRequests.get(f.bob, second.changeRequest.id)).changeRequest.status,
       ).toBe("SUPERSEDED");
+    });
+
+    describe("schedule changes by the owner of a task used under AGREEMENT", () => {
+      async function agreedUse() {
+        const placed = await placedReference();
+        await f.services.links.setReferenceType(f.admin, placed.ref.id, { type: "AGREEMENT" });
+        return placed;
+      }
+      const current = (id: string) => f.services.items.get(f.alice, id);
+      const openProposal = async (planId: string) =>
+        (await f.services.plans.getView(planId === f.planB.id ? f.bob : f.alice, planId))
+          .proposedChanges[0];
+      const NEXT_WEEK = "2026-06-15T00:00:00.000Z";
+
+      it("turns a move into a proposal that applies once the using plan approves", async () => {
+        const { external } = await agreedUse();
+        const before = await current(external.id);
+        const returned = await f.services.items.move(f.alice, external.id, {
+          version: before.version,
+          start: NEXT_WEEK,
+        });
+        expect(returned.start).toBe(before.start);
+        expect(returned.version).toBe(before.version);
+        const proposal = (await openProposal(f.planA.id))!;
+        expect(proposal).toMatchObject({
+          planId: f.planA.id,
+          proposed: { start: NEXT_WEEK, duration: before.duration },
+        });
+        expect(await openProposal(f.planB.id)).toEqual(proposal);
+
+        const [request] = await f.services.changeRequests.pendingForItem(f.bob, external.id);
+        expect(request?.approvals.map((a) => a.planId)).toEqual([f.planB.id]);
+        // The owner cannot approve its own change; the using plan decides.
+        await expect(
+          f.services.changeRequests.decide(f.alice, request!.approvals[0]!.id, {
+            decision: "APPROVE",
+            comment: "",
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await f.services.changeRequests.decide(f.bob, request!.approvals[0]!.id, {
+          decision: "APPROVE",
+          comment: "Fine by us",
+        });
+        expect((await current(external.id)).start).toBe(NEXT_WEEK);
+        expect(await openProposal(f.planA.id)).toBeUndefined();
+      });
+
+      it("leaves the task as it was when the using plan rejects", async () => {
+        const { external } = await agreedUse();
+        const before = await current(external.id);
+        await f.services.items.update(f.alice, external.id, {
+          version: before.version,
+          duration: before.duration + 3,
+          reason: "Supplier delay",
+        });
+        expect((await current(external.id)).duration).toBe(before.duration);
+        const [request] = await f.services.changeRequests.pendingForItem(f.bob, external.id);
+        expect(request?.changeRequest.description).toBe("Supplier delay");
+        await f.services.changeRequests.decide(f.bob, request!.approvals[0]!.id, {
+          decision: "REJECT",
+          comment: "No",
+        });
+        expect((await current(external.id)).duration).toBe(before.duration);
+      });
+
+      it("applies other fields at once, and only proposes the schedule", async () => {
+        const { external } = await agreedUse();
+        const before = await current(external.id);
+        const saved = await f.services.items.update(f.alice, external.id, {
+          version: before.version,
+          notes: "Changed",
+          duration: before.duration + 1,
+        });
+        expect(saved).toMatchObject({ notes: "Changed", duration: before.duration });
+        expect(await openProposal(f.planA.id)).toBeDefined();
+      });
+
+      it("does nothing when the dialog saves unchanged values", async () => {
+        const { external } = await agreedUse();
+        const before = await current(external.id);
+        await f.services.items.update(f.alice, external.id, {
+          version: before.version,
+          start: before.start,
+          duration: before.duration,
+          granularity: before.granularity,
+          name: before.name,
+          notes: before.notes,
+          ownership: before.ownership,
+        });
+        expect((await current(external.id)).version).toBe(before.version);
+        expect(await openProposal(f.planA.id)).toBeUndefined();
+      });
+
+      it("replaces the owner's earlier proposal with a newer one", async () => {
+        const { external } = await agreedUse();
+        const { version } = await current(external.id);
+        await f.services.items.move(f.alice, external.id, { version, start: NEXT_WEEK });
+        await f.services.items.move(f.alice, external.id, {
+          version,
+          start: "2026-06-22T00:00:00.000Z",
+        });
+        const { proposedChanges } = await f.services.plans.getView(f.alice, f.planA.id);
+        expect(proposedChanges.map((c) => c.proposed.start)).toEqual(["2026-06-22T00:00:00.000Z"]);
+      });
+
+      it("moves a task only monitored by other plans at once", async () => {
+        const { external } = await placedReference();
+        const { version } = await current(external.id);
+        await f.services.items.move(f.alice, external.id, { version, start: NEXT_WEEK });
+        expect((await current(external.id)).start).toBe(NEXT_WEEK);
+      });
+
+      it("drops the proposal when the using plan stops using it under AGREEMENT", async () => {
+        const { external, ref } = await agreedUse();
+        const { version } = await current(external.id);
+        await f.services.items.move(f.alice, external.id, { version, start: NEXT_WEEK });
+        await f.services.links.setReferenceType(f.admin, ref.id, { type: "MONITOR" });
+        expect(await openProposal(f.planA.id)).toBeUndefined();
+
+        await f.services.links.setReferenceType(f.admin, ref.id, { type: "AGREEMENT" });
+        await f.services.items.move(f.alice, external.id, { version, start: NEXT_WEEK });
+        expect(await openProposal(f.planA.id)).toBeDefined();
+        await f.services.items.removeReference(f.bob, ref.id);
+        expect(await openProposal(f.planA.id)).toBeUndefined();
+      });
+
+      it("refuses to move an activity whose tasks need approval", async () => {
+        const { external } = await agreedUse();
+        const parent = await f.task("Parent");
+        await f.services.items.move(f.alice, external.id, {
+          version: (await current(external.id)).version,
+          parentId: parent.id,
+        });
+        const activity = await current(parent.id);
+        await expect(
+          f.services.items.move(f.alice, parent.id, {
+            version: activity.version,
+            start: NEXT_WEEK,
+          }),
+        ).rejects.toBeInstanceOf(RuleViolationError);
+      });
+    });
+  });
+
+  describe("task history", () => {
+    it("lists changes, requests, approvals with comments and uses of the task", async () => {
+      const task = await f.task("Interface", { ownership: "EXTERNAL" });
+      const other = await f.task("Unrelated");
+      const ref = await f.services.items.addReference(f.bob, {
+        itemId: task.id,
+        planId: f.planB.id,
+        linkType: "AGREEMENT",
+      });
+      await f.services.items.update(f.alice, other.id, { version: other.version, notes: "x" });
+      const { version } = await f.services.items.get(f.alice, task.id);
+      await f.services.items.move(f.alice, task.id, {
+        version,
+        start: "2026-06-15T00:00:00.000Z",
+      });
+      const [request] = await f.services.changeRequests.pendingForItem(f.bob, task.id);
+      await f.services.changeRequests.decide(f.bob, request!.approvals[0]!.id, {
+        decision: "APPROVE",
+        comment: "Fine by us",
+      });
+
+      const history = await f.services.audit.taskHistory(f.alice, task.id);
+      expect(history.entries.map((e) => `${e.entityType}:${e.action}`)).toEqual([
+        "task:create",
+        "planLink:create",
+        "planItemReference:create",
+        "changeRequest:create",
+        "approval:approve",
+        "task:update",
+        "changeRequest:accept",
+      ]);
+      expect(history.entries.some((e) => e.entityId === other.id)).toBe(false);
+      expect(history.entries.find((e) => e.action === "approve")?.details.comment).toBe(
+        "Fine by us",
+      );
+      const crId = request!.changeRequest.id;
+      expect(history.requests[crId]).toMatchObject({
+        planName: f.planA.name,
+        proposed: { start: "2026-06-15T00:00:00.000Z" },
+      });
+      expect(history.planNames[request!.approvals[0]!.id]).toBe(f.planB.name);
+      expect(history.planNames[ref.id]).toBe(f.planB.name);
+    });
+
+    it("needs access to a project using the task", async () => {
+      const task = await f.task("Private");
+      await expect(f.services.audit.taskHistory(f.outsider, task.id)).rejects.toBeInstanceOf(
+        ForbiddenError,
+      );
     });
   });
 

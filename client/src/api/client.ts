@@ -49,6 +49,7 @@ import type {
   SetReferenceTypeInput,
   SetupInput,
   TaskApprovalRequest,
+  TaskHistory,
   Task,
   Timeline,
   UpdateBaselineItemInput,
@@ -218,6 +219,7 @@ export const api = {
         `/api/approvals/pending${projectId ? `?projectId=${enc(projectId)}${subprojects ? "&subprojects=true" : ""}` : ""}`,
       ),
     forItem: (itemId: string) => get<TaskApprovalRequest[]>(`/api/items/${enc(itemId)}/approvals`),
+    history: (itemId: string) => get<TaskHistory>(`/api/items/${enc(itemId)}/history`),
     decide: (approvalId: string, input: DecideApprovalInput) =>
       post<ChangeRequestWithApprovals>(`/api/approvals/${enc(approvalId)}/decision`, input),
   },

@@ -46,7 +46,8 @@ import {
  * Rows in hierarchy order. References to external tasks sit among the local
  * tasks; their row id is the referenced task's id (as used by dependencies).
  * MONITOR references are read-only; AGREEMENT references can be dragged,
- * which proposes the change to the task's owner.
+ * which proposes the change to the task's owner. The server does the same
+ * for an owner's own task when other plans use it under AGREEMENT.
  */
 function buildRows(view: PlanView, agreed: Baseline | null, canEdit: boolean): GanttRow[] {
   const agreedEnd = new Map((agreed?.items ?? []).map((i) => [i.itemId, i.end]));
@@ -261,7 +262,7 @@ export function GanttView({ planId }: { planId: string }) {
               version: item.version,
               start: fromDisplayDate(start, item.granularity),
             }),
-          );
+          ).then(() => void reload()); // a proposal leaves the bar at the current dates
       },
       onResize: (id, start, end) => {
         if (findReference(id)) return propose(id, start, end);
@@ -273,7 +274,7 @@ export function GanttView({ planId }: { planId: string }) {
               start: fromDisplayDate(start, item.granularity),
               end: fromDisplayDate(end, item.granularity),
             }),
-          );
+          ).then(() => void reload());
       },
       onOpen: (id) => {
         const item = findItem(id);

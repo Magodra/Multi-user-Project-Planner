@@ -136,6 +136,8 @@ Make a task **external** (Ownership in the task dialog) to use it in other plans
 | MONITOR   | The task follows the owner and cannot be changed. You see changes and variance markers.                                         |
 | AGREEMENT | Changing the task's dates or name sends a proposal to the owner plan. Until the owner decides, it is drawn as a dashed outline. |
 
+If a task is used under AGREEMENT, its owner can't simply move it either. A change to its dates or duration in the owner plan, by dragging or in the dialog, is sent to the plans using it under AGREEMENT. It's drawn as a dashed outline until they have all approved, and then the task moves. A rejection leaves the task as it was. The name, notes and hierarchy are not affected and change at once.
+
 The type is set per reference. The task dialog in the owner plan, and the external-task dialog in the receiving plan, can upgrade a MONITOR reference to AGREEMENT. The task's current agreed values carry over, so no new approval round is needed. The owner's dialog can also downgrade an AGREEMENT reference back to MONITOR.
 
 ## Baselines and approvals

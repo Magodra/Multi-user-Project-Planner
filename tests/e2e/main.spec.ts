@@ -766,6 +766,40 @@ test("the task owner approves a proposed change from the task dialog", async ({ 
   await expect(row("Shared delivery")).toContainText("8 days");
   await page.getByRole("tab", { name: "Approvals" }).click();
   await expect(page.getByTestId("approval-card")).toHaveCount(0);
+
+  // The owner's own schedule change now goes to the plan using the task.
+  await page.getByRole("tab", { name: "Supplier" }).click();
+  await row("Shared delivery").dblclick();
+  await page.getByRole("dialog").getByLabel("Duration").fill("12");
+  await page.getByLabel("Reason for the change").fill("Supplier delay");
+  await page.getByRole("button", { name: "Propose change", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".pp-proposal-bar:visible")).toHaveCount(1);
+  await expect(row("Shared delivery")).toContainText("8 days");
+  await page.getByRole("tab", { name: "Approvals" }).click();
+  await page
+    .getByTestId("approval-card")
+    .filter({ hasText: "Change: Shared delivery" })
+    .getByRole("button", { name: "Approve", exact: true })
+    .click();
+  await expect(page.getByTestId("approval-card")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Supplier" }).click();
+  await expect(row("Shared delivery")).toContainText("12 days");
+
+  // The task dialog's audit log shows the changes, requests and decisions, keeping edits.
+  await row("Shared delivery").dblclick();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Notes").fill("Unsaved note");
+  await dialog.getByRole("tab", { name: "Audit log", exact: true }).click();
+  const log = dialog.getByTestId("task-audit-log");
+  await expect(log.locator("li").first()).toContainText("Accepted: Change: Shared delivery");
+  await expect(log).toContainText("Approved for Customer");
+  await expect(log).toContainText("Approved for Supplier");
+  await expect(log).toContainText("Supplier delay");
+  await expect(log).toContainText("Used in Customer (AGREEMENT)");
+  await expect(log).toContainText("Created");
+  await dialog.getByRole("tab", { name: "Details", exact: true }).click();
+  await expect(dialog.getByLabel("Notes")).toHaveValue("Unsaved note");
 });
 
 test("link a local task to an external task from another project by its local ID", async ({

@@ -95,6 +95,8 @@ export const updateTaskInput = z.object({
   duration: z.number().min(0).optional(),
   granularity: granularitySchema.optional(),
   ownership: z.enum(["INTERNAL", "EXTERNAL"]).optional(),
+  /** Why the schedule changes, when the change goes to other plans for approval. */
+  reason: z.string().optional(),
 });
 
 export const moveTaskInput = z.object({

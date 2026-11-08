@@ -51,6 +51,16 @@ export interface ScheduleChange {
  * Apply a schedule change. `duration` wins over `end`; if only `end` is
  * given, the duration is recomputed from the range in the item's unit.
  */
+/** Whether two schedules differ in anything that moves or resizes the task. */
+export function scheduleDiffers(a: Schedule, b: Schedule): boolean {
+  return (
+    a.start !== b.start ||
+    a.end !== b.end ||
+    a.duration !== b.duration ||
+    a.granularity !== b.granularity
+  );
+}
+
 export function applyScheduleChange(
   task: Schedule,
   change: ScheduleChange,

@@ -4,6 +4,7 @@ import type {
   DependencyType,
   AgreementState,
   Approval,
+  AuditLogEntry,
   Baseline,
   BaselineItem,
   ChangeRequest,
@@ -152,6 +153,26 @@ export interface PendingApproval {
 }
 
 /** An open ChangeRequest covering a task, with the approvals the current user can decide. */
+/** A change request as shown in a task's audit log. */
+export interface TaskHistoryRequest {
+  title: string;
+  kind: ChangeRequest["kind"];
+  description: string;
+  /** Plan that raised the request. */
+  planName: string;
+  /** The values proposed for this task. */
+  proposed: BaselineItem | null;
+}
+
+/** Everything the audit log holds about one task, oldest first. */
+export interface TaskHistory {
+  entries: AuditLogEntry[];
+  /** Change requests covering the task, by id. */
+  requests: Record<string, TaskHistoryRequest>;
+  /** Plan name of each approval and reference, by their id. */
+  planNames: Record<string, string>;
+}
+
 export interface TaskApprovalRequest {
   changeRequest: ChangeRequest;
   approvals: Approval[];

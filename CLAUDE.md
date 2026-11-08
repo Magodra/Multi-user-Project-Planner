@@ -250,7 +250,8 @@ There is one item entity, the **Task**. Its kind follows from its data:
   - Changes are always made in the owner plan.
   - Recipient plans always see the owner's current values (live), but can compare against their own agreed baseline.
   - In the recipient plan a reference is placed among the local tasks: under a local task (`parentId`) or at the top level, ordered together with the tasks (`sortOrder` is shared). A local task with references under it is an activity and rolls up their dates; when the owner changes the task, recipient plans that placed it under an activity are rolled up too (`rollUpPlan`). A milestone cannot hold references.
-  - Name, start, duration and unit always come from the owner's task. In the recipient plan it is shown as "Name (from Owner plan)" (`ResolvedReference.ownerPlanName`). On a **MONITOR** reference they cannot be changed in the recipient plan. On an **AGREEMENT** reference a local change (dialog or dragging the bar) creates a ChangeRequest of kind `PROPOSE_TASK_CHANGE` with one Approval for the owner plan (approvers of the Estimated definition). Approval applies the values to the owner's task; rejection changes nothing. A newer proposal from the same plan, or any change to the task by its owner, supersedes it.
+  - **The owner's schedule changes under AGREEMENT**: when a task is used under AGREEMENT in other plans, a change to its dates, duration or unit in the owner plan (dragging, dialog, REST or MCP) is not applied. It creates a `PROPOSE_TASK_CHANGE` raised by the owner plan, with one Approval per using plan under AGREEMENT and per extra party on the link (`usingPlanApprovals`, approvers of that plan's Estimated definition). When all approve it is applied; a rejection changes nothing. Name, notes, ownership and hierarchy apply at once. A newer proposal from the owner replaces the older one. If a using plan removes the task or downgrades to MONITOR, the owner's open proposal is superseded. An activity with such tasks (or that is used so itself) cannot be moved as a whole. Tasks only used under MONITOR, and internal tasks, move at once.
+  - Name, start, duration and unit always come from the owner's task. In the recipient plan it is shown as "Name (from Owner plan)" (`ResolvedReference.ownerPlanName`). On a **MONITOR** reference they cannot be changed in the recipient plan. On an **AGREEMENT** reference a local change (dialog or dragging the bar) creates a ChangeRequest of kind `PROPOSE_TASK_CHANGE` with one Approval for the owner plan (approvers of the Estimated definition). Approval applies the values to the owner's task; rejection changes nothing. A newer proposal from the same plan, or a change applied to the task by its owner, supersedes it.
 
 ### Link types (per PlanLink)
 
@@ -298,7 +299,7 @@ Every plan has at least these three "tracks":
 
 | Track | Meaning |
 |---|---|
-| **Estimated** | Working draft / forecast. Freely editable by the plan's owners. |
+| **Estimated** | Working draft / forecast. Freely editable by the plan's owners, except the schedule of tasks used under AGREEMENT in other plans (see §4). |
 | **Current** | The current internally committed plan. |
 | **Agreed** | Agreed with other parties (contract/agreement). |
 
@@ -341,7 +342,7 @@ Each project starts with three definitions (Estimated, Current, Agreed); see `de
 4. Acceptance is **atomic**: either the whole ChangeRequest is accepted, or nothing is.
 5. A new change to an item with an open ChangeRequest marks the old one as `SUPERSEDED`.
 6. **Rejected approval on an external item that is already current in a recipient plan**: the item stays in Current in the recipient plan, but gets the agreement state `REJECTED`. It is not rolled back. The rejected state is shown in the UI and kept until a new ChangeRequest is approved or the item changes.
-7. **Proposed task changes** (`PROPOSE_TASK_CHANGE`, see §4): raised in a recipient plan, decided by the owner plan, applied to the owner's live task when approved.
+7. **Proposed task changes** (`PROPOSE_TASK_CHANGE`, see §4): raised in a recipient plan and decided by the owner plan, or raised by the owner plan and decided by the plans using the task under AGREEMENT. Applied to the owner's live task when approved.
 
 ## 7. User interface
 
@@ -361,6 +362,7 @@ Each project starts with three definitions (Estimated, Current, Agreed); see `de
 - **Calendar view**: day/week/month/year; tasks shown as events, milestones as markers.
 - **Status indicators**: internal/external, MONITOR/AGREEMENT, pending approval, rejected, variance against agreed. Plans show MON/AGR on references, and owner plans on their external tasks: one badge per type in use, its tooltip listing the plans.
 - **Proposed task changes** (`PROPOSE_TASK_CHANGE`) are drawn in the Gantt as a dashed outline at the proposed dates, in the proposing plan and the owner plan (`PlanView.proposedChanges`), until the owner decides.
+- **Task audit log**: the task dialogs (own and external tasks) have an "Audit log" tab: the task's changes, the requests covering it with their approvals and comments, and its uses, link types and dependencies, newest first (`AuditService.taskHistory`, `GET /api/items/:id/history`; only projects the user can read).
 - **Approval inbox**: list of ChangeRequests the user needs to act on, in the workspace's project and its subprojects. The task dialogs (own and external tasks) also list the open requests covering that task (`ChangeRequestService.pendingForItem`), with Approve/Reject where the user may decide. Both use the same decision endpoint (UI only).
 - Live updates via WebSocket when other users change data.
 
