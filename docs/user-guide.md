@@ -126,6 +126,7 @@ Make a task **external** (Ownership in the task dialog) to use it in other plans
 
 - In the receiving plan, the reference is placed among the local tasks: at the top level or under a local task. It gets a local ID there, so local tasks can depend on it.
 - It is shown as "Name (from _Owner plan_)". The **EXT** badge's tooltip lists the plans that use the task.
+- In the owner plan, the task also shows **AGR** and/or **MON** for how other plans use it. A task can have both, and each badge's tooltip lists the plans of that type.
 - An external activity is shown as an activity, with its full length.
 
 **Reference types**
@@ -173,8 +174,10 @@ A timeline is a picture of selected tasks over time, for example for a roadmap o
 - **Add tasks** by dragging them from a plan's **Task List** onto a row. A timeline can show tasks from any project you can read.
 - **Rows** have an editable name and can be moved up and down.
 - **Areas:** each row has three. Callouts above the timeline, bars on the timeline, and callouts below.
-- **Rearranging:** drag an entry to another line, area or row. Each area has an empty line at its edge for starting a new line.
+- **Rearranging:** drag an entry to another line, area or row. Drop a bar on the thin line above or below the others to start a new line.
+- **Callouts** can be placed freely: drag the label where you want it, and it stays there. A line connects it to its task on the timeline.
 - **Milestones** are drawn as ◆ followed by their name.
+- **Pending approval:** a task with a pending request shows a **PEND** badge. A change proposed from another plan is also drawn as a dashed outline at the proposed dates: a rectangle, or a diamond if it proposes zero duration. A task shown as a callout has its outline on the edge of the timeline. Hover the task to see the details.
 - **Removing:** hover an entry and choose × to remove it from the timeline. The task itself is not affected.
 
 ## Calendar

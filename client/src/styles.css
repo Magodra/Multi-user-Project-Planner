@@ -620,145 +620,32 @@ body:has(.pp-workspace) {
   overflow: auto;
   display: block;
 }
-.pp-tl-scale,
-.pp-tl-row {
-  display: flex;
+.pp-timeline .tlv,
+.pp-timeline .tlv-ghost {
+  --tlv-task: var(--pp-primary);
+  --tlv-milestone: #7c3aed;
 }
-.pp-tl-label {
-  width: 140px;
-  flex: none;
-  padding: 0.3rem;
-  font-weight: 600;
-  border-right: 1px solid var(--pp-border);
-}
-.pp-tl-ticks {
-  position: relative;
-  flex: 1;
-  height: 1.6rem;
-  border-bottom: 1px solid var(--pp-border);
-  min-width: 600px;
-}
-.pp-tl-ticks span {
-  position: absolute;
-  font-size: 0.75rem;
-  color: var(--pp-muted);
-  padding-left: 2px;
-  border-left: 1px solid var(--pp-border);
-  height: 100%;
-  white-space: nowrap;
-}
-.pp-tl-row {
-  border-bottom: 1px solid var(--pp-border);
-}
-.pp-tl-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.pp-tl-row-name {
-  font-weight: 600;
-  width: 100%;
-}
-.pp-tl-body {
-  position: relative;
-  flex: 1;
-  min-width: 600px;
-  display: flex;
-  flex-direction: column;
-}
-/* The timeline band itself, between the callout areas. */
-.pp-tl-area-on {
-  background: #f1f5fb;
-  border-top: 2px solid var(--pp-border);
-  border-bottom: 2px solid var(--pp-border);
-}
-.pp-tl-lane {
-  position: relative;
-  height: 28px;
-}
-/* The empty line at the edge of an area: thin until something is dragged over it. */
-.pp-tl-lane.pp-tl-lane-new {
-  height: 12px;
-}
-.pp-tl-lane.pp-tl-lane-new.pp-drop-over {
-  height: 28px;
-}
-.pp-tl-lane.pp-drop-over {
-  background: #eef4ff;
-  outline: 2px dashed var(--pp-primary);
-  outline-offset: -2px;
-}
-.pp-tl-placeholder {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--pp-muted);
-  font-size: 0.85rem;
-}
-.pp-tl-entry {
-  position: absolute;
-  height: 22px;
-  background: var(--pp-primary);
-  color: #fff;
-  border-radius: 4px;
-  padding: 0 0.3rem;
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  gap: 0.2rem;
-  overflow: hidden;
-  white-space: nowrap;
-  min-width: 18px;
-}
-.pp-tl-entry {
-  top: 3px;
-  cursor: grab;
-  touch-action: none;
-  /* Short tasks on a long timeline stay wide enough to grab. */
-  min-width: 28px;
-}
-.pp-tl-entry.pp-dragging {
-  opacity: 0.4;
-}
-/* The remove button only appears on hover, so small entries can be grabbed. */
-.pp-tl-entry:not(:hover):not(:focus-within) .pp-tl-remove {
-  display: none;
-}
-.pp-tl-callout {
+/* Badges sit on coloured bars, so they need their own background. */
+.pp-timeline .tlv .pp-badge {
   background: var(--pp-surface);
-  color: var(--pp-text);
-  border: 1px solid var(--pp-border);
-  border-left: 3px solid var(--pp-primary);
-  border-radius: 0 4px 4px 0;
-  white-space: nowrap;
 }
-.pp-tl-callout small {
-  color: var(--pp-muted);
+.pp-timeline .tlv-tooltip {
+  white-space: pre-line;
 }
-.pp-tl-diamond {
-  color: #7c3aed;
-  font-size: 1rem;
-  line-height: 1;
-  flex: none;
+/* A pending proposal, at the proposed dates: a rectangle, or a diamond for zero duration. */
+.pp-tl-proposal {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed var(--pp-pending);
+  border-radius: 4px;
 }
-/* On the timeline a milestone is no bar: the diamond is centred on its date, the name follows. */
-.pp-tl-entry.pp-tl-milestone:not(.pp-tl-callout) {
-  background: transparent;
-  color: var(--pp-text);
-  padding-left: 0;
-  min-width: 0;
-  transform: translateX(-0.5rem);
+.pp-tl-proposal-diamond {
+  border-radius: 2px;
+  transform: rotate(45deg);
 }
-.pp-tl-entry span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pp-tl-remove {
-  border: none;
-  background: none;
-  color: inherit;
-  padding: 0 0.2rem;
+/* Rows are added from the toolbar, with the timeline's own dates. */
+.pp-timeline .tlv-menu {
+  display: none;
 }
 
 /* Calendar */

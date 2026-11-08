@@ -29,8 +29,9 @@ The user interface is an HTML page with Gantt charts, timelines and a calendar v
 - **Client libraries**:
   - **Dockview** — multi-panel workspace (dockable, resizable, tabbed panels). The panel layout is serialised and stored as a Workspace. Since v8 the React binding is the `dockview-react` package (`dockview` itself is framework-agnostic).
   - **FullCalendar (MIT core only)** — calendar view, v6.1 with the standard `daygrid`, `timegrid` and `multimonth` plugins. Do not use FullCalendar Premium plugins.
-  - **dnd-kit** — dragging tasks/milestones from plans into timelines, including between Dockview panels.
+  - **dnd-kit** — dragging tasks/milestones from plans into timelines and other plans, including between Dockview panels.
   - **DHTMLX Gantt Community Edition** — Gantt view (see §7).
+  - **ar-timeline-view** — timeline view (see §7), used through its React wrapper in events-only mode (no `api_url`), so every change is saved through our REST API.
 - A browser cannot safely write shared files for multiple users at once; a thin server is therefore used for the file backend as well.
 - The client must never know which backend is in use.
 
@@ -149,7 +150,7 @@ Rules that make `file://` work:
 /client
   index.html, vite.config.ts, public/client-config.js
   /src
-    /views         gantt/ (GanttAdapter = all DHTMLX code), timeline/, calendar/, reports/,
+    /views         gantt/ (GanttAdapter = all DHTMLX code), timeline/ (layout.ts = conversion to ar-timeline-view), calendar/, reports/,
                    approvals/ (inbox, baselines & change requests), project/ (plans and subprojects, members)
     /components    shared UI components and status badges
     /workspace     Dockview workspace, panel registry, project data + live updates
@@ -349,13 +350,16 @@ Each project starts with three definitions (Estimated, Current, Agreed); see `de
 - **Gantt**: hierarchy (WBS) with task IDs and a Predecessors column, dependency arrows, drag to move/resize, move up/down among siblings, indent/outdent (→ / ←), a today line, and a timeline scale (hours, days, weeks, months, quarters, years) with zoom −/+, Ctrl + wheel, Fit and Today. The scale logic is library-neutral in `views/gantt/scale.ts`.
 - **Baseline overlay**: select one or more baselines and show them as shadow/outline bars behind the active plan. Variances are colour-coded (earlier/later). Default: Agreed, Current, Estimated.
 - **Timelines**: user-configurable (name, time span, scale, rows/swimlanes). Tasks are **dragged in** from a plan; the timeline shows references, not copies.
-  - Rows have an editable name and can be moved up and down. A row has three areas: **callouts above** the timeline, the **timeline** itself (bars in lines) and **callouts below**. Each entry stores its `placement` (`above` | `on` | `below`) and `line` (callouts: 0 is nearest the timeline).
-  - Entries are dragged between lines, areas and rows (dnd-kit; drops go to the line under the pointer). Each area has an empty line at its outer edge for opening a new line; lines are renumbered without gaps (`views/timeline/layout.ts`).
+  - Drawn by **ar-timeline-view**. `views/timeline/layout.ts` converts a Timeline to the library's data (one view; each row is one of its timelines, with the same span) and back. The library's model is display state: after each change it reports, the view's rows and entries are saved through the server, then reloaded. Drawing replaces the view's DOM, so it waits for a running drag or save.
+  - Rows have an editable name and can be moved up and down. A row has three areas: **callouts above** the timeline, the **timeline** itself (bars in lines) and **callouts below**. Each entry stores its `placement` (`above` | `on` | `below`). Bars have a `line` (no gaps). Callouts have a free position, `calloutX` and `calloutY`, in px from the attachment point on the bar's edge (the middle of a task, a milestone's date).
+  - Entries are dragged between lines, areas and rows by the library. Plan tasks are dragged in with dnd-kit: the panel is one drop target, and the library finds the spot under the pointer (`targetAt`, `addEntry`).
+  - **Pending requests and proposals**: the timeline reads `pendingItemIds` and `proposedChanges` from the plan views of its tasks. A task with a pending request gets a PEND badge on its bar, milestone or callout. Each `PROPOSE_TASK_CHANGE` is drawn as a dashed outline at the proposed dates, a rectangle or (zero duration) a diamond, through the library's task and callout layers, until the owner decides.
+  - Status text is built as DOM nodes, not HTML strings, in the library's templates, because task names are user input.
   - A timeline can show tasks of **any project**; adding a task needs read access to its plan, and the workspace subscribes to live changes of those projects. Deleting a plan removes its tasks from every timeline. Timelines are listed after the plans in the Project panel's structure tree.
-  - Entries stored before placement existed read as bars spread over three lines (`normalizeTimelineEntries`); SQL migration `0003_timeline_entry_layout` adds the two columns.
+  - Entries stored before placement existed read as bars spread over three lines, and callouts stored with a numbered line read at that line's position (`normalizeTimelineEntries`). SQL migrations `0003_timeline_entry_layout` and `0004_timeline_callout_offset` add the columns.
 - **Using tasks in other plans**: tasks are dragged from a plan's Task List onto another plan's Gantt or Task List panel. This adds a MONITOR reference in that plan, also for plans of subprojects opened in the workspace. Dropping an internal task asks to make it external first. The task dialog's "Use in another plan" lists the plans using the task with their MON/AGR type, offers the upgrade to AGREEMENT, and adds the task to another plan of the project tree with a chosen type.
 - **Calendar view**: day/week/month/year; tasks shown as events, milestones as markers.
-- **Status indicators**: internal/external, MONITOR/AGREEMENT, pending approval, rejected, variance against agreed.
+- **Status indicators**: internal/external, MONITOR/AGREEMENT, pending approval, rejected, variance against agreed. Plans show MON/AGR on references, and owner plans on their external tasks: one badge per type in use, its tooltip listing the plans.
 - **Proposed task changes** (`PROPOSE_TASK_CHANGE`) are drawn in the Gantt as a dashed outline at the proposed dates, in the proposing plan and the owner plan (`PlanView.proposedChanges`), until the owner decides.
 - **Approval inbox**: list of ChangeRequests the user needs to act on, in the workspace's project and its subprojects. The task dialogs (own and external tasks) also list the open requests covering that task (`ChangeRequestService.pendingForItem`), with Approve/Reject where the user may decide. Both use the same decision endpoint (UI only).
 - Live updates via WebSocket when other users change data.
@@ -371,7 +375,7 @@ Each project starts with three definitions (Estimated, Current, Agreed); see `de
   - **Markers**, **undo/redo**, **multi-select and horizontal drag** — implement in our own UI layer if needed.
 - Auto-scheduling, critical path and resources are out of scope for the Gantt component; any scheduling logic lives in `/server/services`.
 - Keep all DHTMLX-specific code behind an adapter in `/client/views/gantt` so the library can be replaced (or upgraded to PRO) without touching the rest of the client.
-- **Panel resizes**: Dockview resizes panels and moves them between groups without a window resize. DHTMLX's own size watcher (a hidden iframe) stops working once the panel is moved, so the adapter re-renders from a `ResizeObserver` on its container; the calendar view does the same with FullCalendar's `updateSize()`. Any other view that measures its container needs the same. Guard against re-layout loops: ignore size changes under 1px (fractional display scaling), never derive a size from a `scrollHeight` the element itself contributes to, and keep the workspace page from scrolling (`body:has(.pp-workspace)`), since a page scrollbar's width shifts every panel.
+- **Panel resizes**: Dockview resizes panels and moves them between groups without a window resize. DHTMLX's own size watcher (a hidden iframe) stops working once the panel is moved, so the adapter re-renders from a `ResizeObserver` on its container; the calendar view does the same with FullCalendar's `updateSize()`. Any other view that measures its container needs the same (ar-timeline-view does this itself). Guard against re-layout loops: ignore size changes under 1px (fractional display scaling), never derive a size from a `scrollHeight` the element itself contributes to, and keep the workspace page from scrolling (`body:has(.pp-workspace)`), since a page scrollbar's width shifts every panel.
 - Do not modify the library source in place. If a patch is unavoidable, keep it in `/client/vendor-patches` with a note explaining why.
 
 ## 8. Reports

@@ -145,9 +145,25 @@ describe.each(allBackends)("StorageAdapter contract: $name", (backend) => {
       entries: [{ id: "e1", rowId: "r1", itemId: "i1", planId: "p1", placement: "on", line: 0 }],
     };
     await storage.save("timeline", timeline);
-    const updated = await storage.save("timeline", { ...timeline, version: 1, entries: [] });
+    const callout = {
+      id: "e2",
+      rowId: "r1",
+      itemId: "i2",
+      planId: "p1",
+      placement: "below" as const,
+      line: 0,
+      calloutX: -30,
+      calloutY: 42,
+    };
+    const withCallout = await storage.save("timeline", {
+      ...timeline,
+      version: 1,
+      entries: [callout],
+    });
+    expect((await storage.get("timeline", timeline.id))?.entries).toEqual([callout]);
+    const updated = await storage.save("timeline", { ...withCallout, entries: [] });
     expect((await storage.get("timeline", timeline.id))?.entries).toEqual([]);
-    expect(updated.version).toBe(2);
+    expect(updated.version).toBe(3);
   });
 
   it("handles global entities", async () => {

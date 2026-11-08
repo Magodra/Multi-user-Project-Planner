@@ -219,6 +219,8 @@ const timelineEntrySchema = z.object({
   planId: id,
   placement: z.enum(["above", "on", "below"]).default("on"),
   line: z.number().int().min(0).default(0),
+  calloutX: z.number().int().optional(),
+  calloutY: z.number().int().optional(),
 });
 
 export const createTimelineInput = z.object({

@@ -19,6 +19,18 @@ async function signIn(page: Page) {
   await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
 }
 
+/** Drag with real pointer events, past dnd-kit's and the timeline's drag thresholds. */
+async function dragWithMouse(page: Page, from: Locator, to: Locator) {
+  const a = (await from.boundingBox())!;
+  const b = (await to.boundingBox())!;
+  const x = a.x + 4; // grab near the left edge (the remove button sits on the right)
+  await page.mouse.move(x, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x + 20, a.y + a.height / 2, { steps: 5 });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 20 });
+  await page.mouse.up();
+}
+
 test("plan, accept and approve through the UI", async ({ page }, info) => {
   const projectName = `E2E ${info.project.name} ${Date.now()}`;
   await signIn(page);
@@ -83,57 +95,58 @@ test("drag a plan task into a timeline", async ({ page }, info) => {
     .getByRole("tab", { name: "Tasks: Delivery" })
     .dragTo(page.locator(".dv-groupview").first(), { targetPosition: { x: 5, y: 200 } });
   const source = page.locator(".pp-outline-row", { hasText: "Kick-off" });
-  const drag = async (from: Locator, to: Locator) => {
-    const a = (await from.boundingBox())!;
-    const b = (await to.boundingBox())!;
-    const x = a.x + 4; // grab near the left edge (the remove button sits on the right)
-    await page.mouse.move(x, a.y + a.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(x + 20, a.y + a.height / 2, { steps: 5 });
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 20 });
-    await page.mouse.up();
-  };
-  const firstRow = page.locator('[data-testid^="timeline-row-"]').first();
-  const line = (placement: string, n: number) =>
-    firstRow.locator(`[data-testid$="-${placement}-${n}"]`);
-  const entry = page.getByTestId("timeline-entry").filter({ hasText: "Kick-off" });
+  const drag = (from: Locator, to: Locator) => dragWithMouse(page, from, to);
+  const firstRow = page.locator(".tlv-timeline").first();
+  const area = (placement: string) => firstRow.locator(`.tlv-area[data-placement="${placement}"]`);
+  const barLine = (n: number) =>
+    firstRow.locator(`.tlv-line:not(.tlv-line--new)[data-placement="on"][data-line="${n}"]`);
+  const bar = page.locator(".tlv-task", { hasText: "Kick-off" });
+  const callout = page.locator(".tlv-callout", { hasText: "Kick-off" });
   await expect(source).toBeVisible();
-  await drag(source, line("on", 0));
-  await expect(entry).toHaveAttribute("data-placement", "on");
+  await drag(source, barLine(0));
+  await expect(bar).toBeVisible();
 
-  // Out of the timeline into a callout above, then below, then back on a new line.
-  await drag(entry, line("above", 0));
-  await expect(entry).toHaveAttribute("data-placement", "above");
-  await expect(entry).toHaveClass(/pp-tl-callout/);
-  await drag(entry, line("below", 0));
-  await expect(entry).toHaveAttribute("data-placement", "below");
-  await drag(entry, line("on", 0));
-  await expect(entry).toHaveAttribute("data-placement", "on");
-  await expect(entry).toHaveAttribute("data-line", "0");
+  // Out of the timeline into a callout above, then below, then back onto the bar.
+  await drag(bar, area("above"));
+  await expect(callout).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  await expect(area("above").locator(".tlv-callout", { hasText: "Kick-off" })).toBeVisible();
+  await drag(callout, area("below"));
+  await expect(area("below").locator(".tlv-callout", { hasText: "Kick-off" })).toBeVisible();
 
-  // A milestone is a diamond followed by its name.
-  await drag(page.locator(".pp-outline-row", { hasText: "Go-live" }), line("on", 1));
-  const milestone = page.getByTestId("timeline-entry").filter({ hasText: "Go-live" });
-  await expect(milestone.locator(".pp-tl-diamond")).toHaveText("◆");
-  await expect(milestone).toContainText("◆Go-live");
+  // A callout's free position survives a reload of the timeline.
+  const position = () => callout.evaluate((el) => (el as HTMLElement).style.marginLeft);
+  const placedAt = await position();
+  await page.getByRole("tab", { name: "Roadmap" }).click();
+  await expect(callout).toBeVisible();
+  await expect.poll(position).toBe(placedAt);
+
+  await drag(callout, barLine(0));
+  await expect(bar).toBeVisible();
+  await expect(callout).toHaveCount(0);
+
+  // A milestone is a symbol followed by its name.
+  await drag(page.locator(".pp-outline-row", { hasText: "Go-live" }), barLine(0));
+  const milestone = page.locator(".tlv-milestone", { hasText: "Go-live" });
+  await expect(milestone.locator(".tlv-symbol--diamond")).toBeVisible();
 
   // Rows can be renamed and reordered.
   await page.getByPlaceholder("New row").fill("Milestones");
   await page.getByRole("button", { name: "Add row", exact: true }).click();
-  const names = page.getByLabel("Row name");
+  const names = page.locator(".tlv-name-text");
   await expect(names).toHaveCount(2);
   await names.first().fill("Delivery work");
   await names.first().press("Enter");
-  await page.getByRole("button", { name: "Move row Milestones up", exact: true }).click();
-  await expect(names.first()).toHaveValue("Milestones");
-  await expect(names.nth(1)).toHaveValue("Delivery work");
+  await page.locator(".tlv-timeline").nth(1).getByRole("button", { name: "Move up" }).click();
+  await expect(names.first()).toHaveText("Milestones");
+  await expect(names.nth(1)).toHaveText("Delivery work");
 
   // The Project tab lists the timeline next to the plans and opens it.
   await page.getByRole("tab", { name: "Project" }).click();
   const tree = page.getByRole("tree", { name: "Project structure" });
   await expect(tree.locator(".pp-tree-timeline")).toContainText("Roadmap");
   await tree.getByRole("button", { name: "Roadmap", exact: true }).click();
-  await expect(page.getByLabel("Timeline name")).toHaveValue("Roadmap");
+  await expect(page.getByLabel("Timeline title")).toHaveValue("Roadmap");
 });
 
 test("edit a project's details, parent and active state", async ({ page }, info) => {
@@ -400,13 +413,19 @@ test("drag tasks from the task list onto another plan to monitor them", async ({
       .locator(".pp-outline-row", { hasText: "Shared delivery" })
       .locator(".pp-badge", { hasText: "EXT 1" }),
   ).toHaveAttribute("title", "External task used in 1 other plan(s):\n• Customer");
+  // It also shows how that plan uses the task.
+  await expect(
+    page
+      .locator(".pp-outline-row", { hasText: "Shared delivery" })
+      .locator(".pp-badge", { hasText: "MON" }),
+  ).toHaveAttribute("title", "MONITOR link: changes are notified\n• Customer");
 
   // An internal task is made external first, after confirmation.
   page.once("dialog", (d) => void d.accept());
   await dragOnto("Internal work");
   await expect(monitored("Internal work")).toContainText("MON");
   await expect(
-    page.locator(".pp-outline-row", { hasText: "Internal work" }).locator(".pp-badge"),
+    page.locator(".pp-outline-row", { hasText: "Internal work" }).locator(".pp-badge").first(),
   ).toContainText("EXT");
 
   // The receiving plan upgrades a monitored task to AGREEMENT from its dialog.
@@ -601,6 +620,101 @@ test("delete the selected task from the plan view", async ({ page }, info) => {
   await expect(page.locator(".gantt_row", { hasText: "Phase" })).toBeVisible();
 });
 
+test("a timeline shows pending proposals as outlines and PEND badges", async ({ page }, info) => {
+  await signIn(page);
+  const projectName = `Proposals ${info.project.name} ${Date.now()}`;
+  await page.getByPlaceholder("New project name").fill(projectName);
+  await page.getByRole("button", { name: "Create project", exact: true }).click();
+  await page.getByRole("link", { name: projectName }).click();
+  for (const plan of ["Supplier", "Customer"]) {
+    await page.getByPlaceholder("Plan name").fill(plan);
+    await page.getByRole("button", { name: "Add plan", exact: true }).click();
+    await expect(page.getByRole("button", { name: plan, exact: true })).toBeVisible();
+  }
+  const row = (name: string) => page.locator(".gantt_row:visible", { hasText: name });
+  await page.getByRole("button", { name: "Supplier", exact: true }).click();
+  for (const name of ["Delivery", "Handover"]) {
+    await page.getByRole("button", { name: "+ Task", exact: true }).click();
+    await page.getByLabel("Name", { exact: true }).fill(name);
+    await page.getByLabel("Ownership").selectOption("EXTERNAL");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await row(name).dblclick();
+    await page.getByLabel("Plan to use the task in").selectOption({ label: "Customer" });
+    await page.getByLabel("Reference type").selectOption("AGREEMENT");
+    await page.getByRole("button", { name: "Add reference", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  }
+
+  // Customer proposes a longer duration for one task and zero duration for the other.
+  await page.getByRole("tab", { name: "Project" }).click();
+  await page.getByRole("button", { name: "Customer", exact: true }).click();
+  for (const [name, duration] of [
+    ["Delivery", "8"],
+    ["Handover", "0"],
+  ] as const) {
+    await row(name).dblclick();
+    await page.getByRole("dialog").getByLabel("Duration").fill(duration);
+    await page.getByRole("button", { name: "Propose change", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
+
+  // Add both to a timeline, from the owner plan's task list.
+  await page.getByRole("tab", { name: "Supplier" }).click();
+  await page.getByRole("button", { name: "Task List", exact: true }).click();
+  page.once("dialog", (d) => void d.accept("Roadmap"));
+  await page.locator(".pp-topbar summary", { hasText: "Timelines" }).click();
+  await page.getByRole("button", { name: "+ New timeline", exact: true }).click();
+  await page
+    .getByRole("tab", { name: "Tasks: Supplier" })
+    .dragTo(page.locator(".dv-groupview").first(), { targetPosition: { x: 5, y: 200 } });
+  const firstRow = page.locator(".tlv-timeline").first();
+  const barLine = (n: number) =>
+    firstRow.locator(`.tlv-line:not(.tlv-line--new)[data-placement="on"][data-line="${n}"]`);
+  await expect(page.locator(".pp-outline-row", { hasText: "Delivery" })).toBeVisible();
+  await dragWithMouse(page, page.locator(".pp-outline-row", { hasText: "Delivery" }), barLine(0));
+  const bar = page.locator(".tlv-task", { hasText: "Delivery" });
+  await expect(bar.locator(".pp-badge")).toHaveText("PEND");
+  // Both start on the same date, so the second gets its own line.
+  const newLine = firstRow.locator('.tlv-line--new[data-placement="on"][data-line="1"]');
+  await dragWithMouse(page, page.locator(".pp-outline-row", { hasText: "Handover" }), newLine);
+  await expect(page.locator(".tlv-task", { hasText: "Handover" }).locator(".pp-badge")).toHaveText(
+    "PEND",
+  );
+
+  // A rectangle for the longer duration, a diamond for zero duration.
+  const track = firstRow.locator(".tlv-track");
+  await expect(track.locator(".pp-tl-proposal:not(.pp-tl-proposal-diamond)")).toHaveCount(1);
+  await expect(track.locator(".pp-tl-proposal-diamond")).toHaveCount(1);
+
+  // As a callout, the task keeps its badge and its outline moves to the callout area.
+  const above = firstRow.locator('.tlv-area[data-placement="above"]');
+  await dragWithMouse(page, bar, above);
+  const callout = page.locator(".tlv-callout", { hasText: "Delivery" });
+  await expect(callout.locator(".pp-badge")).toHaveText("PEND");
+  await expect(above.locator(".pp-tl-proposal")).toHaveCount(1);
+  await expect(track.locator(".pp-tl-proposal:not(.pp-tl-proposal-diamond)")).toHaveCount(0);
+
+  // Deciding the request clears both, live.
+  await page.getByRole("tab", { name: "Roadmap" }).click();
+  await page
+    .locator(".pp-topbar")
+    .getByRole("button", { name: /Approvals/ })
+    .click();
+  for (const name of ["Delivery", "Handover"]) {
+    await page
+      .getByTestId("approval-card")
+      .filter({ hasText: `Change: ${name}` })
+      .getByRole("button", { name: "Approve", exact: true })
+      .click();
+    await expect(
+      page.getByTestId("approval-card").filter({ hasText: `Change: ${name}` }),
+    ).toHaveCount(0);
+  }
+  await page.getByRole("tab", { name: "Roadmap" }).click();
+  await expect(page.locator(".pp-tl-proposal")).toHaveCount(0);
+  await expect(page.locator(".tlv .pp-badge")).toHaveCount(0);
+});
+
 test("the task owner approves a proposed change from the task dialog", async ({ page }, info) => {
   await signIn(page);
   const projectName = `Approve ${info.project.name} ${Date.now()}`;
@@ -623,6 +737,7 @@ test("the task owner approves a proposed change from the task dialog", async ({ 
   await page.getByLabel("Reference type").selectOption("AGREEMENT");
   await page.getByRole("button", { name: "Add reference", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(row("Shared delivery").locator(".pp-badge", { hasText: "AGR" })).toBeVisible();
 
   // Customer proposes a longer duration.
   await page.getByRole("tab", { name: "Project" }).click();

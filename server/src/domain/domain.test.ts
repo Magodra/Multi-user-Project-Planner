@@ -583,4 +583,42 @@ describe("timeline entries", () => {
       ["above", 2],
     ]);
   });
+
+  const entry = (fields: Partial<TimelineEntry>): TimelineEntry => ({
+    id: "e",
+    rowId: "r1",
+    itemId: "i",
+    planId: "p",
+    placement: "on",
+    line: 0,
+    ...fields,
+  });
+
+  it("places callouts stored with a numbered line at that line's position", () => {
+    const [above, below] = normalizeTimelineEntries([
+      entry({ placement: "above", line: 0 }),
+      entry({ placement: "below", line: 2 }),
+    ]);
+    expect(above).toMatchObject({ calloutX: 0, calloutY: -16 });
+    expect(below).toMatchObject({ calloutX: 0, calloutY: 72 });
+  });
+
+  it("keeps a free callout position, on the callout's side of the bar", () => {
+    const [kept, above, below] = normalizeTimelineEntries([
+      entry({ placement: "below", calloutX: 30, calloutY: 40 }),
+      entry({ placement: "above", calloutX: 5, calloutY: 12 }),
+      entry({ placement: "below", calloutX: 5, calloutY: -12 }),
+    ]);
+    expect(kept).toMatchObject({ calloutX: 30, calloutY: 40 });
+    expect(above?.calloutY).toBe(0);
+    expect(below?.calloutY).toBe(1);
+  });
+
+  it("gives bars no callout position, also when a backend returns empty columns", () => {
+    const [bar] = normalizeTimelineEntries([
+      entry({ calloutX: null, calloutY: null } as unknown as Partial<TimelineEntry>),
+    ]);
+    expect(bar).not.toHaveProperty("calloutX");
+    expect(bar).not.toHaveProperty("calloutY");
+  });
 });

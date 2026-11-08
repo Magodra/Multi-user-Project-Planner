@@ -7,10 +7,25 @@ export interface StatusBadge {
   className: string;
 }
 
+/** A plan using an external task, as named in the owner plan. */
+export interface TaskRecipient {
+  name: string;
+  linkType: LinkType;
+}
+
+const AGREEMENT_TITLE = "AGREEMENT link: changes need approval of all parties";
+const MONITOR_TITLE = "MONITOR link: changes are notified";
+
+export const PENDING_BADGE: StatusBadge = {
+  label: "PEND",
+  title: "Pending approval",
+  className: "pp-b-pending",
+};
+
 export function itemBadges(input: {
   external: boolean;
-  /** Plans using this external task (names, shown in the tooltip). */
-  recipients: string[];
+  /** Plans using this external task, with the type of each use. */
+  recipients: TaskRecipient[];
   reference: boolean;
   linkType: LinkType | null;
   pending: boolean;
@@ -29,13 +44,13 @@ export function itemBadges(input: {
     if (input.linkType === "AGREEMENT")
       badges.push({
         label: "AGR",
-        title: "AGREEMENT link: changes need approval of all parties",
+        title: AGREEMENT_TITLE,
         className: "pp-b-agreement",
       });
     else
       badges.push({
         label: "MON",
-        title: "MONITOR link: changes are notified",
+        title: MONITOR_TITLE,
         className: "pp-b-monitor",
       });
   } else if (input.external) {
@@ -46,10 +61,27 @@ export function itemBadges(input: {
           ? "External task, not used in other plans yet"
           : [
               `External task used in ${input.recipients.length} other plan(s):`,
-              ...input.recipients.map((n) => `• ${n}`),
+              ...input.recipients.map((r) => `• ${r.name}`),
             ].join("\n"),
       className: "pp-b-ext",
     });
+    // One task can be AGREEMENT towards one plan and MONITOR towards another.
+    const linkBadge = (
+      linkType: LinkType,
+      label: string,
+      title: string,
+      className: string,
+    ): void => {
+      const plans = input.recipients.filter((r) => r.linkType === linkType);
+      if (plans.length > 0)
+        badges.push({
+          label,
+          title: [title, ...plans.map((r) => `• ${r.name}`)].join("\n"),
+          className,
+        });
+    };
+    linkBadge("AGREEMENT", "AGR", AGREEMENT_TITLE, "pp-b-agreement");
+    linkBadge("MONITOR", "MON", MONITOR_TITLE, "pp-b-monitor");
   }
   if (input.dependencyIssues?.length)
     badges.push({
@@ -57,8 +89,7 @@ export function itemBadges(input: {
       title: input.dependencyIssues.join("\n"),
       className: "pp-b-late",
     });
-  if (input.pending)
-    badges.push({ label: "PEND", title: "Pending approval", className: "pp-b-pending" });
+  if (input.pending) badges.push(PENDING_BADGE);
   if (input.agreementState === "REJECTED")
     badges.push({ label: "REJ", title: "Agreement rejected", className: "pp-b-rejected" });
   else if (input.agreementState === "PROPOSED")

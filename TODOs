@@ -1,9 +1,10 @@
 
-Task list:
+# Task list:
 
 
-Timeline:
+# Timeline:
 
-
-
-
+## Worth checking
+- PEND covers any pending request, not only proposals: this matches what PEND means in the Gantt, so a task waiting for Estimated → Current approval also gets the badge, but no outline. If you want it only for proposals, it's a one-line change.
+- Load cost: each reload of a timeline now fetches one plan view per plan on it, and it reloads on every task or change-request event. That's fine for a handful of plans, but a timeline spanning many could feel slow.
+- Permissions: if a viewer can't read a task's plan, that task shows no badge or outline.

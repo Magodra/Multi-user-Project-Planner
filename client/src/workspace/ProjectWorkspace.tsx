@@ -22,6 +22,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { Link } from "react-router-dom";
@@ -36,15 +37,18 @@ import { GanttView } from "../views/gantt/GanttView";
 import { PlanItemsView } from "../views/gantt/PlanItemsView";
 import { ProjectView } from "../views/project/ProjectView";
 import { ReportsView } from "../views/reports/ReportsView";
-import { TimelineView, addItemToTimeline, moveTimelineEntry } from "../views/timeline/TimelineView";
+import {
+  TimelineView,
+  dropOnTimeline,
+  highlightTimelineDrop,
+} from "../views/timeline/TimelineView";
 import { useLive, useProject } from "./ProjectContext";
 import {
   type PanelKind,
   type PanelParams,
   type PlanDropData,
   type PlanItemDragData,
-  type TimelineEntryDragData,
-  type TimelineRowDropData,
+  type TimelineDropData,
   type WorkspaceActions,
   WorkspaceActionsContext,
 } from "./panels";
@@ -64,13 +68,16 @@ const components: Record<PanelKind, FunctionComponent<IDockviewPanelProps>> = {
 
 const SAVE_DELAY_MS = 1000;
 
-/**
- * Drop on what is under the pointer (timeline lines are thin and stacked);
- * fall back to the largest overlap when the pointer is over no target.
- */
+/** Drop on what is under the pointer; else on the largest overlap. */
 const dropUnderPointer: CollisionDetection = (args) => {
   const underPointer = pointerWithin(args);
   return underPointer.length > 0 ? underPointer : rectIntersection(args);
+};
+
+/** Where the pointer is now, from where the drag started. */
+const pointerOf = (e: DragMoveEvent | DragEndEvent) => {
+  const start = e.activatorEvent as PointerEvent;
+  return { x: start.clientX + e.delta.x, y: start.clientY + e.delta.y };
 };
 
 export function ProjectWorkspace() {
@@ -80,7 +87,7 @@ export function ProjectWorkspace() {
   const workspaceRef = useRef<{ id: string; version: number } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<PlanItemDragData | TimelineEntryDragData | null>(null);
+  const [dragging, setDragging] = useState<PlanItemDragData | null>(null);
   // The project itself starts expanded until the user's saved state is loaded.
   const [viewState, setViewState] = useState<WorkspaceViewState>({
     expandedProjectIds: [project.id],
@@ -226,22 +233,28 @@ export function ProjectWorkspace() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const onDragStart = (e: DragStartEvent) =>
-    setDragging(
-      (e.active.data.current as PlanItemDragData | TimelineEntryDragData | undefined) ?? null,
+    setDragging((e.active.data.current as PlanItemDragData | undefined) ?? null);
+  const onDragMove = (e: DragMoveEvent) => {
+    const target = e.over?.data.current as TimelineDropData | PlanDropData | undefined;
+    highlightTimelineDrop(
+      target?.type === "timeline" ? { timelineId: target.timelineId, point: pointerOf(e) } : null,
     );
+  };
   const onDragEnd = (e: DragEndEvent) => {
     setDragging(null);
-    const item = e.active.data.current as PlanItemDragData | TimelineEntryDragData | undefined;
-    const target = e.over?.data.current as TimelineRowDropData | PlanDropData | undefined;
+    highlightTimelineDrop(null);
+    const item = e.active.data.current as PlanItemDragData | undefined;
+    const target = e.over?.data.current as TimelineDropData | PlanDropData | undefined;
     const fail = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
-    if (item?.type === "timeline-entry") {
-      if (target?.type === "timeline-row") moveTimelineEntry(target, item).catch(fail);
-      return;
-    }
     if (item?.type !== "plan-item") return;
-    if (target?.type === "timeline-row") addItemToTimeline(target, item).catch(fail);
+    if (target?.type === "timeline")
+      dropOnTimeline(target.timelineId, pointerOf(e), item).catch(fail);
     if (target?.type === "plan" && target.planId !== item.planId)
       void monitorInPlan(item, target.planId).then(() => setError(null), fail);
+  };
+  const onDragCancel = () => {
+    setDragging(null);
+    highlightTimelineDrop(null);
   };
 
   return (
@@ -306,8 +319,9 @@ export function ProjectWorkspace() {
           sensors={sensors}
           collisionDetection={dropUnderPointer}
           onDragStart={onDragStart}
+          onDragMove={onDragMove}
           onDragEnd={onDragEnd}
-          onDragCancel={() => setDragging(null)}
+          onDragCancel={onDragCancel}
         >
           <div className="pp-dock">
             <DockviewReact components={components} onReady={onReady} theme={themeLight} />

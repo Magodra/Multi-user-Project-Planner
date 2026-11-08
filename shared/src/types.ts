@@ -242,11 +242,16 @@ export interface TimelineEntry {
   itemId: UUID;
   planId: UUID;
   placement: TimelinePlacement;
-  /**
-   * Line within the placement area, from 0. For callouts, line 0 is nearest
-   * the timeline; for bars, line 0 is the top line.
-   */
+  /** Bar line, from 0 at the top. Callouts use `calloutX` and `calloutY` instead. */
   line: number;
+  /**
+   * A callout's free position, in px: from its attachment point on the bar's
+   * edge (the middle of a task, or a milestone's date) to the label's left
+   * edge and to its edge nearest the bar. `calloutY` is at most 0 above the
+   * bar and greater than 0 below it. Bars have neither.
+   */
+  calloutX?: number;
+  calloutY?: number;
 }
 
 export interface Timeline extends Versioned {

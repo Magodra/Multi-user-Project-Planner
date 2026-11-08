@@ -2,6 +2,7 @@
  * A plan's hierarchy as shown in the Gantt and the task list: local tasks and
  * references to external tasks share one order under each parent.
  */
+import type { TaskRecipient } from "../../components/status";
 import type { PlanView, ResolvedReference, Task } from "@planning/shared";
 
 type RowBody = { type: "task"; task: Task } | { type: "reference"; reference: ResolvedReference };
@@ -65,8 +66,9 @@ export function referenceName(reference: ResolvedReference): string {
 }
 
 /** Names of the plans using an own external task; plans of other projects get their project's name. */
-export function recipientNames(view: PlanView, taskId: string): string[] {
-  return (view.recipients[taskId] ?? []).map((r) =>
-    r.projectId === view.plan.projectId ? r.planName : `${r.planName} (${r.projectName})`,
-  );
+export function taskRecipients(view: PlanView, taskId: string): TaskRecipient[] {
+  return (view.recipients[taskId] ?? []).map((r) => ({
+    name: r.projectId === view.plan.projectId ? r.planName : `${r.planName} (${r.projectName})`,
+    linkType: r.linkType,
+  }));
 }

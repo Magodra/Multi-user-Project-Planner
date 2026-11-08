@@ -29,7 +29,7 @@ import {
 } from "./GanttAdapter";
 import { ItemDialog } from "./ItemDialog";
 import { describeDependencyIssue, lagText } from "./dependencyText";
-import { planRows, recipientNames, referenceName, siblingsOf } from "./planRows";
+import { planRows, referenceName, siblingsOf, taskRecipients } from "./planRows";
 import { ReferenceDialog } from "./ReferenceDialog";
 import { predecessorText } from "./predecessors";
 import {
@@ -78,7 +78,7 @@ function buildRows(view: PlanView, agreed: Baseline | null, canEdit: boolean): G
         ].filter(Boolean),
         badges: itemBadges({
           external: t.ownership === "EXTERNAL",
-          recipients: recipientNames(view, t.id),
+          recipients: taskRecipients(view, t.id),
           reference: false,
           linkType: null,
           pending: pending.has(t.id),

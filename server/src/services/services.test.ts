@@ -1404,11 +1404,33 @@ describe.each(serviceBackends)("services on $name", (backend) => {
         version: tl.version,
         entries: [
           { id: "e1", rowId: "r1", itemId: t.id, planId: f.planA.id, placement: "on", line: 0 },
+          {
+            id: "callout",
+            rowId: "r1",
+            itemId: t.id,
+            planId: f.planA.id,
+            placement: "below",
+            line: 0,
+            calloutX: 12,
+            calloutY: 40,
+          },
         ],
       });
-      expect(updated.entries).toEqual([
+      const expected = [
         { id: "e1", rowId: "r1", itemId: t.id, planId: f.planA.id, placement: "on", line: 0 },
-      ]);
+        {
+          id: "callout",
+          rowId: "r1",
+          itemId: t.id,
+          planId: f.planA.id,
+          placement: "below",
+          line: 0,
+          calloutX: 12,
+          calloutY: 40,
+        },
+      ];
+      expect(updated.entries).toEqual(expected);
+      expect((await f.services.timelines.get(f.alice, tl.id)).entries).toEqual(expected);
       await expect(
         f.services.timelines.update(f.alice, tl.id, {
           version: updated.version,
