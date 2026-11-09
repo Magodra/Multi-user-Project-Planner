@@ -1,0 +1,16 @@
+// Server configuration for generating the tutorial's pictures (see tests/docs/start-server.ts).
+{
+  "backend": "file",
+  "file": { "path": "./.tmp/data" },
+  "server": {
+    "port": 8182,
+    "allowedOrigins": [],
+    "allowFileClient": false,
+    "clientDir": "../../client/dist"
+  },
+  "mcp": { "enabled": false, "path": "/mcp" },
+  "auth": {
+    "mode": "local",
+    "local": { "passwordMinLength": 8, "sessionTimeoutMinutes": 60 }
+  }
+}

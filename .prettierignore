@@ -5,6 +5,7 @@ coverage
 test-results
 playwright-report
 tests/e2e/.tmp
+tests/docs/.tmp
 package-lock.json
 CLAUDE.md
 LICENSE

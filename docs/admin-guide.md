@@ -24,7 +24,7 @@ npm run build
 PLANNING_CONFIG=./config.json node server/dist/index.js
 ```
 
-`npm run build` builds the shared package, the server (`server/dist`) and the client (`client/dist`).
+`npm run build` builds the shared package, the server (`server/dist`) and the client (`client/dist`). If Chromium is installed for Playwright, it also regenerates the tutorial's pictures; set `SKIP_DOCS_IMAGES=1` to leave them out.
 
 The server reads `config.json` from the working directory, or the file named in the `PLANNING_CONFIG` environment variable. Run it under a service manager (systemd, a Windows service, a container) so it restarts after a failure.
 

@@ -171,7 +171,8 @@ Rules that make `file://` work:
   /scripts         migrate, migrate:make
 /shared/src        types, zod schemas, API shapes, /time, /domain (getItemKind)
 /tests/e2e         Playwright (hosted + file:// projects)
-/docs              getting started, user guide, server administration (keep in step with features)
+/tests/docs        script that plays docs/tutorial.md and saves its pictures (fixed clock, own server on port 8182)
+/docs              getting started, tutorial, user guide, server administration (keep in step with features)
 config.example.json, config.dev.json
 ```
 
@@ -497,6 +498,7 @@ npm run lint                # ESLint
 npm run format              # Prettier (write)
 npm test                    # Vitest, all packages, all backends
 npm run test:e2e            # Playwright
+npm run docs:images         # regenerate docs/images/tutorial (also run by build; skipped without Chromium or with SKIP_DOCS_IMAGES=1)
 npm run migrate             # run Kysely migrations against the configured SQL database
 npm run migrate:make <name> # create a new migration
 ```

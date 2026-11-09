@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w @planning/server\" \"npm run dev -w @planning/client\"",
-    "build": "npm run build -w @planning/shared && npm run build -w @planning/server && npm run build -w @planning/client",
+    "build": "npm run build -w @planning/shared && npm run build -w @planning/server && npm run build -w @planning/client && node scripts/docs-images.mjs --from-build",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "docs:images": "node scripts/docs-images.mjs",
     "migrate": "npm run migrate -w @planning/server",
     "migrate:make": "npm run migrate:make -w @planning/server --"
   },
