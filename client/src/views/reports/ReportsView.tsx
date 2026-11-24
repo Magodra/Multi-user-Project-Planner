@@ -92,7 +92,7 @@ function NewReportForm({ onCreated }: { onCreated(): void }) {
                 checked={baselineIds.includes(b.id)}
                 onChange={() => toggle(baselineIds, setBaselineIds, b.id)}
               />
-              {b.name}
+              {plans.find((p) => p.id === b.planId)?.name}: {b.name}
             </label>
           ))}
         </fieldset>

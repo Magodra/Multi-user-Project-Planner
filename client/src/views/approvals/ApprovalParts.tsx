@@ -54,8 +54,9 @@ export function DecisionControls({
       (ok) => ok && onDecided?.(),
     );
   return (
-    <div className="pp-row">
-      <input
+    <div className="pp-row pp-decision">
+      <textarea
+        rows={2}
         placeholder="Comment"
         aria-label="Comment"
         value={comment}

@@ -256,6 +256,15 @@ button:disabled {
   gap: 0.5rem;
   margin: 0.25rem 0;
 }
+/* On its own line inside a list item, with the comment taking the free width. */
+.pp-decision {
+  flex: 1 1 100%;
+}
+.pp-decision textarea {
+  flex: 1 1 16rem;
+  min-width: 0;
+  resize: vertical;
+}
 .pp-used-in {
   list-style: none;
   padding: 0;

@@ -1,4 +1,4 @@
-# CLAUDE.md — Multi-user Project Planning System
+# CLAUDE.md — Multi-user Project Planning (MUPP) System
 
 This file gives Claude (and developers) context for working in this repository. Read all of it before making changes.
 
