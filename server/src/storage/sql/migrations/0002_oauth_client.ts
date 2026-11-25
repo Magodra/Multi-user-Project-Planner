@@ -7,7 +7,14 @@ import type { Migration } from "kysely/migration";
 import type { SqlDialectName } from "../db.js";
 
 export function migration(dialect: SqlDialectName): Migration {
-  const jsonType = dialect === "mssql" ? sql`nvarchar(max)` : sql`text`;
+  // MariaDB was added after this migration had run elsewhere; its branches change
+  // nothing for the other dialects (see 0001_initial).
+  const jsonType =
+    dialect === "mssql" ? sql`nvarchar(max)` : dialect === "mariadb" ? sql`longtext` : sql`text`;
+  const tableOptions =
+    dialect === "mariadb"
+      ? sql`engine=InnoDB default charset=utf8mb4 collate=utf8mb4_nopad_bin`
+      : null;
   return {
     async up(db) {
       await db.schema
@@ -17,6 +24,7 @@ export function migration(dialect: SqlDialectName): Migration {
         .addColumn("created_at", "varchar(32)", (c) => c.notNull())
         .addColumn("updated_at", "varchar(32)", (c) => c.notNull())
         .addColumn("data", jsonType, (c) => c.notNull())
+        .$call((b) => (tableOptions ? b.modifyEnd(tableOptions) : b))
         .execute();
     },
     async down(db) {

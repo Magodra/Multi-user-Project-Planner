@@ -14,7 +14,7 @@ const configSchema = z
     file: z.object({ path: z.string().min(1) }).default({ path: "./data" }),
     sql: z
       .object({
-        dialect: z.enum(["postgres", "sqlite", "mssql"]),
+        dialect: z.enum(["postgres", "sqlite", "mssql", "mariadb"]),
         connectionString: z.string().min(1),
       })
       .default({ dialect: "sqlite", connectionString: "./data/planning.db" }),

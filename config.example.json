@@ -7,10 +7,11 @@
     "path": "./data"
   },
   "sql": {
-    "dialect": "postgres", // "postgres" | "sqlite" | "mssql"
+    "dialect": "postgres", // "postgres" | "sqlite" | "mssql" | "mariadb"
     // postgres: "postgres://user:${DB_PASSWORD}@host:5432/planning"
     // sqlite:   "./data/planning.db"
     // mssql:    "mssql://user:${DB_PASSWORD}@host:1433/planning?encrypt=true&trustServerCertificate=false"
+    // mariadb:  "mariadb://user:${DB_PASSWORD}@host:3306/planning" (add ?ssl=true for TLS)
     "connectionString": "postgres://planning:${DB_PASSWORD}@localhost:5432/planning"
   },
   "server": {

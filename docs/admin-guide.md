@@ -9,7 +9,7 @@ The planner has two parts:
 - **The server**: a single Node.js process that holds all business rules, access control and storage. It serves the REST API, live updates over WebSocket, and optionally an MCP endpoint for AI assistants.
 - **The client**: a single file, `index.html`, plus a small `client-config.js`. The server can serve it, or users can open it from a file share.
 
-Data is stored either in files on disk or in an SQL database (PostgreSQL, SQLite or SQL Server).
+Data is stored either in files on disk or in an SQL database (PostgreSQL, SQLite, SQL Server or MariaDB).
 
 ## Install
 
@@ -108,16 +108,25 @@ File storage suits small teams and simple installations. Only one server process
 ```jsonc
 "backend": "sql",
 "sql": {
-  "dialect": "postgres",   // "postgres" | "sqlite" | "mssql"
+  "dialect": "postgres",   // "postgres" | "sqlite" | "mssql" | "mariadb"
   "connectionString": "postgres://planning:${DB_PASSWORD}@localhost:5432/planning"
 }
 ```
 
-| Dialect    | Connection string                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| PostgreSQL | `postgres://user:${DB_PASSWORD}@host:5432/planning`                                        |
-| SQLite     | `./data/planning.db` (a file path)                                                         |
-| SQL Server | `mssql://user:${DB_PASSWORD}@host:1433/planning?encrypt=true&trustServerCertificate=false` |
+| Dialect    | `dialect`  | Connection string                                                                          |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------ |
+| PostgreSQL | `postgres` | `postgres://user:${DB_PASSWORD}@host:5432/planning`                                        |
+| SQLite     | `sqlite`   | `./data/planning.db` (a file path)                                                         |
+| SQL Server | `mssql`    | `mssql://user:${DB_PASSWORD}@host:1433/planning?encrypt=true&trustServerCertificate=false` |
+| MariaDB    | `mariadb`  | `mariadb://user:${DB_PASSWORD}@host:3306/planning`                                         |
+
+**MariaDB** 10.6 or later (tested with 11.4). Add `?ssl=true` for TLS. The server certificate is then verified; `&sslRejectUnauthorized=false` turns that off, for a self-signed certificate on a trusted network. Special characters in the user name or password must be URL-encoded (`@` → `%40`). The planner creates its tables with the `utf8mb4_nopad_bin` collation, whatever the database's default. To create the database and user:
+
+```sql
+CREATE DATABASE planning CHARACTER SET utf8mb4 COLLATE utf8mb4_nopad_bin;
+CREATE USER 'planning'@'localhost' IDENTIFIED BY '...';
+GRANT ALL PRIVILEGES ON planning.* TO 'planning'@'localhost';
+```
 
 Create an empty database and a user that may create tables. The server runs pending migrations at startup. To run them on their own, for example before an upgrade, use `npm run migrate` with `PLANNING_CONFIG` set to the config file's absolute path. Without it, the command falls back to the development configuration.
 

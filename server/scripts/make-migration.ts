@@ -29,7 +29,9 @@ import type { AnyDb, SqlDialectName } from "../db.js";
 export function migration(_dialect: SqlDialectName): Migration {
   return {
     async up(_db: Kysely<AnyDb>) {
-      // TODO: schema changes
+      // TODO: schema changes. On MariaDB, a new table needs
+      // .modifyEnd(sql\`engine=InnoDB default charset=utf8mb4 collate=utf8mb4_nopad_bin\`)
+      // (see 0001_initial).
     },
   };
 }

@@ -1,5 +1,5 @@
 /**
- * SQL backend on Kysely (PostgreSQL, SQLite, SQL Server). All queries are
+ * SQL backend on Kysely (PostgreSQL, SQLite, SQL Server, MariaDB). All queries are
  * built with Kysely and therefore parameterised.
  */
 import type { Kysely } from "kysely";

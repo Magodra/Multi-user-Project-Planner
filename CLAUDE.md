@@ -19,7 +19,7 @@ The user interface is an HTML page with Gantt charts, timelines and a calendar v
 │  Application server           │  Business logic, approvals, access control
 │  └─ StorageAdapter (interface)│
 │      ├─ FileAdapter           │  JSON files on disk
-│      └─ SqlAdapter            │  PostgreSQL / SQLite / SQL Server
+│      └─ SqlAdapter            │  PostgreSQL / SQLite / SQL Server / MariaDB
 └──────────────────────────────┘
 ```
 
@@ -91,7 +91,7 @@ Rules that make `file://` work:
     "path": "./data"
   },
   "sql": {
-    "dialect": "postgres",       // "postgres" | "sqlite" | "mssql"
+    "dialect": "postgres",       // "postgres" | "sqlite" | "mssql" | "mariadb"
     "connectionString": "postgres://user:pass@host:5432/planning"
   },
   "server": {
@@ -444,6 +444,7 @@ data/
 - Table layout (`storage/sql/tables.ts`): every entity table has `id`, `version`, `created_at`, `updated_at`, a `data` column holding the entity as JSON, and real indexed columns for each queryable field. `baseline_item` and `timeline_entry` are fully relational child tables. Adding a field that is not queryable (e.g. the project's `parentProjectId`, `projectType`, `active`) needs no migration: it lives in `data`.
 - Migrations are registered statically in `migrations/index.ts` (no file scanning) and import from `kysely/migration`. The server runs pending migrations at startup; `npm run migrate` does the same on demand.
 - SQL Server connection strings use the URL form `mssql://user:pass@host:1433/db?encrypt=true&trustServerCertificate=false`.
+- **MariaDB** (`dialect: "mariadb"`, 10.6+) runs on Kysely's MySQL dialect with the `mysql2` driver. Connection strings use `mariadb://user:pass@host:3306/db` (`mysql://` accepted; `?ssl=true[&sslRejectUnauthorized=false]` for TLS; `parseMariadbUrl`). Every MariaDB table is created with `engine=InnoDB default charset=utf8mb4 collate=utf8mb4_nopad_bin` (`modifyEnd`), so comparisons are exact as in the other backends; JSON goes in `longtext`, floats in `double`. A new migration that creates a table must add the same options for MariaDB. The MariaDB branches in `0001` and `0002` were added after those migrations had run elsewhere; they change nothing for the other dialects.
 - Use parameterised queries; no string concatenation of SQL.
 
 ## 10. Access control and multi-user
@@ -473,14 +474,14 @@ data/
 | Client build/dev | Vite (React + TypeScript) + `vite-plugin-singlefile` (one `index.html` that runs hosted or from `file://`); dev server proxies `/api` and WebSocket to the server |
 | Server dev | tsx (watch mode) |
 | Server build | tsc |
-| SQL / migrations | Kysely (PostgreSQL, SQLite, SQL Server) |
+| SQL / migrations | Kysely (PostgreSQL, SQLite, SQL Server, MariaDB via mysql2) |
 | Unit/integration tests | Vitest (client, server, shared) |
-| Backend tests | Testcontainers for PostgreSQL and SQL Server; SQLite and FileAdapter in-process |
+| Backend tests | Testcontainers for PostgreSQL, SQL Server and MariaDB; SQLite and FileAdapter in-process |
 | End-to-end tests | Playwright |
 | Lint/format | ESLint (typescript-eslint, react-hooks) + Prettier |
 | Type check | `tsc --noEmit` across all packages (Vite and tsx do not type-check) |
 
-- The `StorageAdapter` contract test suite is parameterised and runs against every backend: file, SQLite, PostgreSQL, SQL Server. Service and MCP tests run against file and SQLite (`server/src/testing/backends.ts`).
+- The `StorageAdapter` contract test suite is parameterised and runs against every backend: file, SQLite, PostgreSQL, SQL Server, MariaDB. Service and MCP tests run against file and SQLite (`server/src/testing/backends.ts`).
 - Testcontainers requires Docker. Backend tests that need Docker can be skipped locally with `SKIP_CONTAINER_TESTS=1`, but always run in CI.
 - TypeScript is pinned to 6.0: TypeScript 7 (native) is not yet supported by typescript-eslint.
 - `@planning/shared` is consumed from source during development through the `source` export condition (tsx `--conditions=source`, Vite/Vitest `resolve.conditions`, `customConditions` in tsconfig). The server production build uses `shared/dist`, so `npm run build` builds shared first.

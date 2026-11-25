@@ -1,13 +1,14 @@
-import { Kysely, MssqlDialect, PostgresDialect, SqliteDialect } from "kysely";
+import { Kysely, MssqlDialect, MysqlDialect, PostgresDialect, SqliteDialect } from "kysely";
 import type { Dialect } from "kysely";
 import Database from "better-sqlite3";
+import { createPool, type PoolOptions } from "mysql2";
 import pg from "pg";
 import * as tarn from "tarn";
 import * as tedious from "tedious";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-export type SqlDialectName = "postgres" | "sqlite" | "mssql";
+export type SqlDialectName = "postgres" | "sqlite" | "mssql" | "mariadb";
 
 /** Tables are addressed dynamically (see tables.ts), so the schema type is open. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,6 +45,8 @@ function createDialect({ dialect, connectionString }: SqlConnectionConfig): Dial
         },
       });
     }
+    case "mariadb":
+      return new MysqlDialect({ pool: createPool(parseMariadbUrl(connectionString)) });
   }
 }
 
@@ -79,5 +82,33 @@ export function parseMssqlUrl(connectionString: string): tedious.ConnectionConfi
       encrypt: flag("encrypt", true),
       trustServerCertificate: flag("trustServerCertificate", false),
     },
+  };
+}
+
+/**
+ * Parse "mariadb://user:pass@host:3306/database?ssl=true&sslRejectUnauthorized=true"
+ * (mysql:// is accepted too). TLS is off unless ssl=true.
+ */
+export function parseMariadbUrl(connectionString: string): PoolOptions {
+  const url = new URL(connectionString);
+  if (url.protocol !== "mariadb:" && url.protocol !== "mysql:") {
+    throw new Error("MariaDB connection string must be a mariadb:// URL");
+  }
+  const flag = (name: string, fallback: boolean) => {
+    const v = url.searchParams.get(name);
+    return v === null ? fallback : v === "true";
+  };
+  return {
+    host: url.hostname,
+    port: url.port ? Number(url.port) : 3306,
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: decodeURIComponent(url.pathname.replace(/^\//, "")) || undefined,
+    ssl: flag("ssl", false)
+      ? { rejectUnauthorized: flag("sslRejectUnauthorized", true) }
+      : undefined,
+    // Tables use a binary collation (see migrations); the connection only needs utf8mb4.
+    charset: "utf8mb4",
+    connectionLimit: 10,
   };
 }

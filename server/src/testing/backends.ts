@@ -1,6 +1,6 @@
 /**
  * Storage backends for parameterised tests. File and SQLite run in-process;
- * PostgreSQL and SQL Server use Testcontainers (requires Docker) and are
+ * PostgreSQL, SQL Server and MariaDB use Testcontainers (requires Docker) and are
  * skipped when SKIP_CONTAINER_TESTS=1.
  */
 import { mkdtemp, rm } from "node:fs/promises";
@@ -48,7 +48,7 @@ export const sqliteBackend: TestBackend = {
 };
 
 function containerBackend(
-  name: "postgres" | "mssql",
+  name: "postgres" | "mssql" | "mariadb",
   start: () => Promise<{ url: string; stop: () => Promise<unknown> }>,
 ): TestBackend {
   let started: Promise<{ url: string; stop: () => Promise<unknown> }> | null = null;
@@ -85,11 +85,18 @@ export const mssqlBackend = containerBackend("mssql", async () => {
   return { url, stop: () => c.stop() };
 });
 
+export const mariadbBackend = containerBackend("mariadb", async () => {
+  const { MariaDbContainer } = await import("@testcontainers/mariadb");
+  const c = await new MariaDbContainer("mariadb:11.4").start();
+  const url = `mariadb://${encodeURIComponent(c.getUsername())}:${encodeURIComponent(c.getUserPassword())}@${c.getHost()}:${c.getPort()}/${c.getDatabase()}`;
+  return { url, stop: () => c.stop() };
+});
+
 /** All backends for the StorageAdapter contract suite. */
 export const allBackends: TestBackend[] = [
   fileBackend,
   sqliteBackend,
-  ...(skipContainers ? [] : [postgresBackend, mssqlBackend]),
+  ...(skipContainers ? [] : [postgresBackend, mssqlBackend, mariadbBackend]),
 ];
 
 /** The two backend families every storage-touching feature is tested against. */
