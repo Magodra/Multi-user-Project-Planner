@@ -493,6 +493,7 @@ data/
 npm install                 # install all workspaces
 npm run dev                 # server (tsx watch) + client (Vite) together
 npm run build               # build shared, server and client
+npm start                   # run the built server (config.json in the working directory; loads .env if present)
 npm run typecheck           # tsc --noEmit for all packages
 npm run lint                # ESLint
 npm run format              # Prettier (write)
@@ -501,6 +502,7 @@ npm run test:e2e            # Playwright
 npm run docs:images         # regenerate docs/images/tutorial (also run by build; skipped without Chromium or with SKIP_DOCS_IMAGES=1)
 npm run migrate             # run Kysely migrations against the configured SQL database
 npm run migrate:make <name> # create a new migration
+.\scripts\deploy.ps1        # build and upload over SSH (password); reads deploy.server.json + deploy.password (gitignored)
 ```
 
 Before considering a change done: `npm run typecheck`, `npm run lint` and `npm test` must pass.

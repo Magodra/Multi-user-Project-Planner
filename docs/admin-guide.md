@@ -21,12 +21,32 @@ cd planner
 npm install
 cp config.example.json config.json   # then edit, see below
 npm run build
-PLANNING_CONFIG=./config.json node server/dist/index.js
+npm start
 ```
 
 `npm run build` builds the shared package, the server (`server/dist`) and the client (`client/dist`). If Chromium is installed for Playwright, it also regenerates the tutorial's pictures; set `SKIP_DOCS_IMAGES=1` to leave them out.
 
-The server reads `config.json` from the working directory, or the file named in the `PLANNING_CONFIG` environment variable. Run it under a service manager (systemd, a Windows service, a container) so it restarts after a failure.
+`npm start` runs the built server from the installation directory. The server reads `config.json` from the working directory, or the file named in the `PLANNING_CONFIG` environment variable. If a `.env` file exists in the working directory, its variables are loaded first, so secrets for `${VAR}` values (e.g. `DB_PASSWORD=...`) can live there instead of in `config.json`. `.env` is ignored by git.
+
+Run the server under a service manager (systemd, pm2, a Windows service, a container) so it starts at boot and restarts after a failure. A systemd unit, e.g. `/etc/systemd/system/planner.service`:
+
+```ini
+[Unit]
+Description=Project planner
+After=network.target
+
+[Service]
+User=planner
+WorkingDirectory=/opt/planner
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it with `sudo systemctl enable --now planner`. With pm2: `pm2 start npm --name planner -- start` from the installation directory, then `pm2 save`. Either can be used as `restartCommand` for [the deploy script](#deploying-from-windows-over-ssh).
 
 On the first start with local sign-in and no users, the login page asks for the first administrator. Create it straight after installing.
 
@@ -281,6 +301,31 @@ Access tokens last `accessTokenMinutes` and are renewed with refresh tokens, val
 1. Back up the data (see [Backups](#backups)).
 2. Get the new version, then run `npm install` and `npm run build`.
 3. Restart the server. SQL migrations run at startup; data stored by older versions is read and upgraded as it is used.
+
+## Deploying from Windows over SSH
+
+`scripts/deploy.ps1` builds the planner on a Windows machine and uploads it to a Linux server with the Windows OpenSSH client, signing in with a password.
+
+1. Copy [`deploy.server.example.json`](../deploy.server.example.json) to `deploy.server.json` in the repository root and edit it.
+2. Put the SSH password, on one line, in `deploy.password` in the repository root. If the file is missing, the script asks for the password.
+3. Run `.\scripts\deploy.ps1` (add `-SkipBuild` to upload the existing build, or `-ServerFile` / `-PasswordFile` to use other files).
+
+Both files are listed in `.gitignore`. Never commit them.
+
+| Setting                 | Default      | Meaning                                                                                                                                      |
+| ----------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`, `port`, `user`  | port 22      | SSH server and account                                                                                                                       |
+| `mode`                  | `app`        | `app`: server and client, then `npm ci --omit=dev` on the server. `client`: only `index.html` and `client-config.js`, for a plain web server |
+| `remotePath`            | —            | Install directory (`app`) or web root (`client`)                                                                                             |
+| `apiUrl`                | —            | If set, written into the uploaded `client-config.js`                                                                                         |
+| `npmCommand`            | `npm`        | npm on the server, e.g. a full path when Node.js is not on the SSH session's `PATH`                                                          |
+| `restartCommand`        | —            | Run on the server after installing, e.g. `pm2 restart planner`. `sudo` only works with a no-password rule                                    |
+| `strictHostKeyChecking` | `accept-new` | OpenSSH host key check: `accept-new` trusts a server on first contact, `yes` requires it in `known_hosts`                                    |
+| `remoteTempDir`         | `/tmp`       | Where the package is uploaded before it is unpacked                                                                                          |
+
+In `app` mode the script replaces `shared/dist`, `server/dist` and `client/dist` and the package files. `config.json` and the data directory on the server are left as they are; create `config.json` there before the first start.
+
+An SSH command runs without the interactive part of `~/.bashrc`, where nvm and similar installers put Node.js on the `PATH`. The script therefore runs a login shell and also looks for nvm, Volta, fnm, `/usr/local/bin` and `/opt/node*/bin`. If `npm` is installed somewhere else, run `command -v npm` in an SSH session and put that full path in `npmCommand`.
 
 ## Limits to plan for
 

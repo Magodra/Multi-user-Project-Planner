@@ -438,3 +438,7 @@ dist/
 /tests/e2e/.tmp/
 /tests/docs/.tmp/
 *.tsbuildinfo
+# Deployment target and SSH password for scripts/deploy.ps1 (never commit)
+/deploy.server.json
+/deploy.password
+*.password
