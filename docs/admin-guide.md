@@ -13,6 +13,8 @@ Data is stored either in files on disk or in an SQL database (PostgreSQL, SQLite
 
 ## Install
 
+### Multi-user Project Planner System (MUPPS)
+
 Requires Node.js 22.12 or later.
 
 ```sh
@@ -28,6 +30,9 @@ npm start
 
 `npm start` runs the built server from the installation directory. The server reads `config.json` from the working directory, or the file named in the `PLANNING_CONFIG` environment variable. If a `.env` file exists in the working directory, its variables are loaded first, so secrets for `${VAR}` values (e.g. `DB_PASSWORD=...`) can live there instead of in `config.json`. `.env` is ignored by git.
 
+### Install service
+
+#### systemd
 Run the server under a service manager (systemd, pm2, a Windows service, a container) so it starts at boot and restarts after a failure. A systemd unit, e.g. `/etc/systemd/system/planner.service`:
 
 ```ini
@@ -46,7 +51,11 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target
 ```
 
-Enable it with `sudo systemctl enable --now planner`. With pm2: `pm2 start npm --name planner -- start` from the installation directory, then `pm2 save`. Either can be used as `restartCommand` for [the deploy script](#deploying-from-windows-over-ssh). To make it reachable on ports 80 and 443 with HTTPS, put nginx in front of it ([Behind nginx](#behind-nginx)).
+Enable it with `sudo systemctl enable --now planner`.
+
+#### pmp
+
+With pm2: `pm2 start npm --name planner -- start` from the installation directory, then `pm2 save`. Either can be used as `restartCommand` for [the deploy script](#deploying-from-windows-over-ssh). To make it reachable on ports 80 and 443 with HTTPS, put nginx in front of it ([Behind nginx](#behind-nginx)).
 
 On the first start with local sign-in and no users, the login page asks for the first administrator. Create it straight after installing.
 
