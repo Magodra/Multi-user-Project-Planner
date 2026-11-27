@@ -33,6 +33,7 @@ npm start
 ### Install service
 
 #### systemd
+
 Run the server under a service manager (systemd, pm2, a Windows service, a container) so it starts at boot and restarts after a failure. A systemd unit, e.g. `/etc/systemd/system/planner.service`:
 
 ```ini
@@ -55,7 +56,11 @@ Enable it with `sudo systemctl enable --now planner`.
 
 #### pmp
 
-With pm2: `pm2 start npm --name planner -- start` from the installation directory, then `pm2 save`. Either can be used as `restartCommand` for [the deploy script](#deploying-from-windows-over-ssh). To make it reachable on ports 80 and 443 with HTTPS, put nginx in front of it ([Behind nginx](#behind-nginx)).
+With pm2: `pm2 start npm --name planner -- start` from the installation directory, then `pm2 save`.
+
+#### Common
+
+Either can be used as `restartCommand` for [the deploy script](#deploying-from-windows-over-ssh). To make it reachable on ports 80 and 443 with HTTPS, put nginx in front of it ([Behind nginx](#behind-nginx)).
 
 On the first start with local sign-in and no users, the login page asks for the first administrator. Create it straight after installing.
 
@@ -232,6 +237,22 @@ GRANT ALL PRIVILEGES ON planning.* TO 'planning'@'localhost';
 ```
 
 Create an empty database and a user that may create tables. The server runs pending migrations at startup. To run them on their own, for example before an upgrade, use `npm run migrate` with `PLANNING_CONFIG` set to the config file's absolute path. Without it, the command falls back to the development configuration.
+
+Linux or macOS, from the installation directory:
+
+```sh
+cd /opt/planner
+PLANNING_CONFIG="$PWD/config.json" npm run migrate
+```
+
+Windows (PowerShell):
+
+```powershell
+cd C:\planner
+$env:PLANNING_CONFIG = "$PWD\config.json"; npm run migrate
+```
+
+It prints the migrations it applied, for example `Applied: 0001_initial, 0002_oauth_client, …`, or `Database is up to date`. The command needs the development tools (`npm install`, not `npm ci --omit=dev`), so it is not available in an installation made with [the deploy script](#deploying-from-windows-over-ssh). There, restarting the server runs the migrations.
 
 ### Backups
 
