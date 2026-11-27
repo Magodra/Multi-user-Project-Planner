@@ -46,7 +46,7 @@ Environment=NODE_ENV=production
 WantedBy=multi-user.target
 ```
 
-Enable it with `sudo systemctl enable --now planner`. With pm2: `pm2 start npm --name planner -- start` from the installation directory, then `pm2 save`. Either can be used as `restartCommand` for [the deploy script](#deploying-from-windows-over-ssh).
+Enable it with `sudo systemctl enable --now planner`. With pm2: `pm2 start npm --name planner -- start` from the installation directory, then `pm2 save`. Either can be used as `restartCommand` for [the deploy script](#deploying-from-windows-over-ssh). To make it reachable on ports 80 and 443 with HTTPS, put nginx in front of it ([Behind nginx](#behind-nginx)).
 
 On the first start with local sign-in and no users, the login page asks for the first administrator. Create it straight after installing.
 
@@ -66,7 +66,101 @@ On the first start with local sign-in and no users, the login page asks for the 
 | `clientDir`       | —       | Serve the built client from this directory, e.g. `"./client/dist"`. Omit to serve only the API |
 | `trustProxy`      | false   | Set to true behind a reverse proxy, so its `X-Forwarded-*` headers are trusted                 |
 
-The server speaks plain HTTP. For HTTPS, put it behind a reverse proxy (nginx, IIS, Caddy, a load balancer) that also forwards WebSocket upgrades, and set `trustProxy: true`.
+The server speaks plain HTTP. For HTTPS, put it behind a reverse proxy (nginx, IIS, Caddy, a load balancer) that also forwards WebSocket upgrades, and set `trustProxy: true`. See [Behind nginx](#behind-nginx) for a complete example.
+
+## Behind nginx
+
+nginx receives the web requests on ports 80 and 443 and forwards them to the planner on `127.0.0.1:8080`. The planner itself serves the client, the API, live updates (WebSocket at `/ws`) and MCP. The examples use `planning.example.com` and a Debian or Ubuntu server.
+
+**1. Configure the planner** (`config.json` in the installation directory), then restart it:
+
+```jsonc
+"server": {
+  "port": 8080,
+  "allowedOrigins": ["https://planning.example.com"], // the address users open
+  "clientDir": "./client/dist",
+  "trustProxy": true
+}
+```
+
+If MCP OAuth is enabled, `mcp.oauth.issuerUrl` must be the same public address.
+
+**2. Install nginx** and create `/etc/nginx/sites-available/planner`:
+
+```sh
+sudo apt install nginx
+```
+
+```nginx
+# Live updates: pass WebSocket upgrades through, close other connections normally.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name planning.example.com;
+
+    client_max_body_size 6m;          # the API accepts JSON bodies up to 5 MB
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+
+        # The planner compares the browser's Origin with Host: keep the original
+        # Host, including a non-standard port ($host would drop it).
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 1h;          # keep idle WebSocket connections open
+        proxy_buffering off;            # stream MCP responses as they are written
+    }
+}
+```
+
+On Red Hat-based systems the file goes in `/etc/nginx/conf.d/planner.conf` instead, and SELinux must allow nginx to connect to the planner: `sudo setsebool -P httpd_can_network_connect 1`.
+
+**3. Enable the site** and reload nginx:
+
+```sh
+sudo ln -s /etc/nginx/sites-available/planner /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default   # if nginx's welcome page answers instead
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**4. Add HTTPS** with a free Let's Encrypt certificate. The DNS name must already point to the server:
+
+```sh
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d planning.example.com --redirect
+```
+
+Certbot adds the `listen 443 ssl` lines and certificate to the server block, redirects HTTP to HTTPS and renews the certificate automatically.
+
+**5. Close port 8080** to the outside. The planner listens on all network interfaces, and requests that bypass nginx have no HTTPS. With ufw:
+
+```sh
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable                      # 8080 stays closed: it is not allowed
+```
+
+**Check:** `https://planning.example.com/api/health` answers `{"status":"ok"}`, and `https://planning.example.com/` shows the sign-in page. In the browser's developer tools, the request to `/ws` should show status 101 (live updates are working).
+
+| Symptom                                        | Cause                                                                                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 502 Bad Gateway                                | The planner is not running or uses another port: `systemctl status planner`, `journalctl -u planner`                           |
+| 502 only on `/ws`                              | The planner refused the WebSocket because of its origin: same causes as 403 below                                              |
+| 403 `Origin not allowed`                       | `proxy_set_header Host $http_host` is missing, or `trustProxy` is not `true` and the public address is not in `allowedOrigins` |
+| 404 `{"error":{"code":"NOT_FOUND"...}}` at `/` | `clientDir` is missing or points to a folder that does not exist                                                               |
+| Other users' changes appear only after reload  | WebSocket upgrades are not forwarded: check the `Upgrade` and `Connection` headers                                             |
+| 413 Request Entity Too Large                   | `client_max_body_size` is missing (nginx allows only 1 MB by default)                                                          |
+
+The example serves the planner at the root of its own host name (`https://planning.example.com/`), which is the tested setup.
 
 ## Client deployment
 
