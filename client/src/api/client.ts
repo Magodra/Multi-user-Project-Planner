@@ -59,7 +59,7 @@ import type {
   UserPreferences,
   Workspace,
 } from "@planning/shared";
-import { apiUrl } from "../config";
+import { apiUrl, configError } from "../config";
 
 export class ApiError extends Error {
   constructor(
@@ -89,6 +89,8 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 type Input = Partial<CreateTaskInput> | object;
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // Never send credentials to a server URL that is missing or unencrypted.
+  if (configError) throw new Error(configError);
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -245,6 +247,7 @@ export const api = {
     delete: (id: string) => del(`/api/reports/${enc(id)}`),
     /** Returns the generated file. */
     run: async (id: string, input: RunReportInput): Promise<Blob> => {
+      if (configError) throw new Error(configError);
       const res = await fetch(`${apiUrl}/api/reports/${enc(id)}/run`, {
         method: "POST",
         headers: {

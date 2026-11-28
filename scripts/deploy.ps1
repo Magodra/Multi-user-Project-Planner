@@ -12,7 +12,7 @@
     app     Uploads the built shared package, server and client, plus the package files, to
             remotePath; then runs "npm ci --omit=dev" there and the optional restartCommand.
             config.json and the data directory on the server are left untouched.
-    client  Uploads only the client (index.html and client-config.js) to remotePath, for a
+    client  Uploads only the client (index.html, client-config.js, favicon.ico) to remotePath, for a
             plain web server. The API runs elsewhere; set apiUrl.
 
   The remote host must have bash and tar (Linux). In app mode it also needs Node.js 22.12+.
@@ -164,7 +164,7 @@ try {
     )
     $clientConfigTarget = Join-Path $stageDir 'client\dist\client-config.js'
   } else {
-    $items = @('client\dist\index.html', 'client\dist\client-config.js')
+    $items = @('client\dist\index.html', 'client\dist\client-config.js', 'client\dist\favicon.ico')
     $clientConfigTarget = Join-Path $stageDir 'client-config.js'
   }
   foreach ($item in $items) {

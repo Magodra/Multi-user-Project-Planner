@@ -1,6 +1,6 @@
 /** Live updates over WebSocket, with reconnect. Authenticates with the first message. */
 import type { RealtimeClientMessage, RealtimeMessage } from "@planning/shared";
-import { webSocketUrl } from "../config";
+import { configError, webSocketUrl } from "../config";
 import { getToken } from "./client";
 
 type ChangeMessage = Extract<RealtimeMessage, { type: "changed" }>;
@@ -40,7 +40,7 @@ export class RealtimeConnection {
 
   private connect(): void {
     const token = getToken();
-    if (!token || this.closed) return;
+    if (!token || this.closed || configError) return;
     const ws = new WebSocket(webSocketUrl());
     this.socket = ws;
     const send = (msg: RealtimeClientMessage) => ws.send(JSON.stringify(msg));

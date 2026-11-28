@@ -150,10 +150,16 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ```sh
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d planning.example.com --redirect
+sudo certbot --nginx -d planning.example.com --redirect --hsts
 ```
 
 Certbot adds the `listen 443 ssl` lines and certificate to the server block, redirects HTTP to HTTPS and renews the certificate automatically.
+
+`--hsts` adds a `Strict-Transport-Security` header to the HTTPS responses. After the first visit, browsers then go straight to HTTPS, so not even the first request of a later visit is sent unencrypted. Browsers remember this for a long time (certbot sets one year), so HTTPS must keep working for that host name. To add it to a site that already has a certificate, run certbot again with `--hsts`, or put this line in the `listen 443 ssl` server block and reload nginx:
+
+```nginx
+add_header Strict-Transport-Security "max-age=31536000" always;
+```
 
 **5. Close port 8080** to the outside. The planner listens on all network interfaces, and requests that bypass nginx have no HTTPS. With ufw:
 
@@ -188,6 +194,8 @@ The same build works in two ways.
 2. set `server.allowFileClient: true` in `config.json`.
 
 Single sign-on does not work in this mode, because the identity provider cannot redirect back to a `file://` page; use local or LDAP sign-in.
+
+**`apiUrl` must use `https://`.** The client refuses an `http://` address and shows the reason on the sign-in page, because passwords and session tokens would be sent unencrypted. Browsers block such requests from an `https://` page, but not from a file opened from disk. The only exception is the local machine (`localhost`, `127.x.x.x`, `[::1]`), for testing.
 
 ```js
 // client-config.js, next to index.html
@@ -445,16 +453,16 @@ Access tokens last `accessTokenMinutes` and are renewed with refresh tokens, val
 
 Both files are listed in `.gitignore`. Never commit them.
 
-| Setting                 | Default      | Meaning                                                                                                                                      |
-| ----------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `host`, `port`, `user`  | port 22      | SSH server and account                                                                                                                       |
-| `mode`                  | `app`        | `app`: server and client, then `npm ci --omit=dev` on the server. `client`: only `index.html` and `client-config.js`, for a plain web server |
-| `remotePath`            | —            | Install directory (`app`) or web root (`client`)                                                                                             |
-| `apiUrl`                | —            | If set, written into the uploaded `client-config.js`                                                                                         |
-| `npmCommand`            | `npm`        | npm on the server, e.g. a full path when Node.js is not on the SSH session's `PATH`                                                          |
-| `restartCommand`        | —            | Run on the server after installing, e.g. `pm2 restart planner`. `sudo` only works with a no-password rule                                    |
-| `strictHostKeyChecking` | `accept-new` | OpenSSH host key check: `accept-new` trusts a server on first contact, `yes` requires it in `known_hosts`                                    |
-| `remoteTempDir`         | `/tmp`       | Where the package is uploaded before it is unpacked                                                                                          |
+| Setting                 | Default      | Meaning                                                                                                                                                     |
+| ----------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`, `port`, `user`  | port 22      | SSH server and account                                                                                                                                      |
+| `mode`                  | `app`        | `app`: server and client, then `npm ci --omit=dev` on the server. `client`: only `index.html`, `client-config.js` and `favicon.ico`, for a plain web server |
+| `remotePath`            | —            | Install directory (`app`) or web root (`client`)                                                                                                            |
+| `apiUrl`                | —            | If set, written into the uploaded `client-config.js`                                                                                                        |
+| `npmCommand`            | `npm`        | npm on the server, e.g. a full path when Node.js is not on the SSH session's `PATH`                                                                         |
+| `restartCommand`        | —            | Run on the server after installing, e.g. `pm2 restart planner`. `sudo` only works with a no-password rule                                                   |
+| `strictHostKeyChecking` | `accept-new` | OpenSSH host key check: `accept-new` trusts a server on first contact, `yes` requires it in `known_hosts`                                                   |
+| `remoteTempDir`         | `/tmp`       | Where the package is uploaded before it is unpacked                                                                                                         |
 
 In `app` mode the script replaces `shared/dist`, `server/dist` and `client/dist` and the package files. `config.json` and the data directory on the server are left as they are; create `config.json` there before the first start.
 

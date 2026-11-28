@@ -76,6 +76,7 @@ Rules that make `file://` work:
   };
   ```
   The client reads this once at startup; never hard-code the server URL.
+  `apiUrl` must be `https://`, except for the local machine (`localhost`, `127.x.x.x`, `[::1]`): otherwise the client shows the reason on the sign-in page and sends no requests or WebSocket connections (`apiUrlError` in `client/src/apiUrlCheck.ts`, applied through `configError`).
 - **Routing**: use hash-based routing (`HashRouter`), since there is no server to rewrite paths on `file://`.
 - **Auth in file mode**: cookies are not usable from `file://`, so the client uses bearer tokens (`Authorization` header) in both modes. Tokens are kept in memory; `localStorage` on `file://` is shared by all local files and must not hold tokens.
 - **CORS**: the server allows the configured hosted origins. Requests from `file://` arrive with `Origin: null`; allowing them is controlled by `server.allowFileClient` in `config.json` (off by default) and requires bearer-token auth.
