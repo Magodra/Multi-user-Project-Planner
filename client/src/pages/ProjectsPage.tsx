@@ -153,6 +153,8 @@ export function ProjectsPage() {
         <label className="pp-check">
           <input
             type="checkbox"
+            id="show-inactive-projects"
+            name="showInactive"
             checked={showInactive}
             onChange={(e) => setShowInactive(e.target.checked)}
           />
@@ -187,16 +189,25 @@ export function ProjectsPage() {
       >
         <Field label="Name">
           <input
+            id="new-project-name"
+            name="projectName"
             placeholder="New project name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
         <Field label="Project type">
-          <input value={projectType} onChange={(e) => setProjectType(e.target.value)} />
+          <input
+            id="new-project-type"
+            name="projectType"
+            value={projectType}
+            onChange={(e) => setProjectType(e.target.value)}
+          />
         </Field>
         <Field label="Parent project">
           <select
+            id="new-project-parent"
+            name="parentProjectId"
             aria-label="Parent project"
             value={parentProjectId ?? ""}
             onChange={(e) => setParentProjectId(e.target.value || null)}

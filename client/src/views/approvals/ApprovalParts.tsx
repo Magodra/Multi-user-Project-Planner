@@ -56,6 +56,7 @@ export function DecisionControls({
   return (
     <div className="pp-row pp-decision">
       <textarea
+        name="decisionComment"
         rows={2}
         placeholder="Comment"
         aria-label="Comment"

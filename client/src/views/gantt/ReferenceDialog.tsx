@@ -93,6 +93,7 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
   const dateInput =
     granularity === "hours" ? (
       <input
+        name="taskStart"
         type="datetime-local"
         value={toDateTimeInputValue(start)}
         onChange={(e) => e.target.value && setStart(fromDateTimeInputValue(e.target.value))}
@@ -100,6 +101,7 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
       />
     ) : (
       <input
+        name="taskStart"
         type="date"
         value={toDateInputValue(start)}
         onChange={(e) => e.target.value && setStart(fromDateInputValue(e.target.value))}
@@ -172,12 +174,18 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
           </p>
         )}
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)} disabled={!editable} />
+          <input
+            name="taskName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={!editable}
+          />
         </Field>
         <div className="pp-row">
           <Field label={granularity === "hours" ? "Start (UTC)" : "Start"}>{dateInput}</Field>
           <Field label="Duration">
             <input
+              name="taskDuration"
               type="number"
               min={0}
               step={granularity === "hours" ? 0.5 : 1}
@@ -188,6 +196,7 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
           </Field>
           <Field label="Unit">
             <select
+              name="taskGranularity"
               value={granularity}
               onChange={(e) => setGranularity(e.target.value as Granularity)}
               disabled={!editable}
@@ -201,6 +210,7 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
         {editable && changed && (
           <Field label="Reason for the change">
             <textarea
+              name="changeReason"
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -215,6 +225,7 @@ export function ReferenceDialog({ view, referenceId, onClose }: Props) {
         />
         <Field label="Parent in this plan">
           <select
+            name="referenceParentId"
             value={parentId ?? ""}
             onChange={(e) => setParentId(e.target.value || null)}
             disabled={!canEdit}

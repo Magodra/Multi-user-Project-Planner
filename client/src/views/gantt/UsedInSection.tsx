@@ -93,6 +93,7 @@ export function UsedInSection({ view, task }: { view: PlanView; task: Task }) {
       {targets && targets.length > 0 && (
         <div className="pp-row">
           <select
+            name="usePlanId"
             value={planId}
             onChange={(e) => setPlanId(e.target.value)}
             aria-label="Plan to use the task in"
@@ -112,6 +113,7 @@ export function UsedInSection({ view, task }: { view: PlanView; task: Task }) {
             })}
           </select>
           <select
+            name="useLinkType"
             value={linkType}
             onChange={(e) => setLinkType(e.target.value as LinkType)}
             aria-label="Reference type"

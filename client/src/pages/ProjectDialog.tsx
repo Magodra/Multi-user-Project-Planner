@@ -67,16 +67,34 @@ export function ProjectDialog({ project, projects, onClose, onSaved }: Props) {
       }
     >
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} />
+        <input
+          id="edit-project-name"
+          name="projectName"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </Field>
       <Field label="Project type">
-        <input value={projectType} onChange={(e) => setProjectType(e.target.value)} />
+        <input
+          id="edit-project-type"
+          name="projectType"
+          value={projectType}
+          onChange={(e) => setProjectType(e.target.value)}
+        />
       </Field>
       <Field label="Description">
-        <textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <textarea
+          id="edit-project-description"
+          name="description"
+          rows={4}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
       </Field>
       <Field label="Parent project">
         <select
+          id="edit-project-parent"
+          name="parentProjectId"
           aria-label="Parent project"
           value={parentProjectId ?? ""}
           onChange={(e) => setParentProjectId(e.target.value || null)}
@@ -90,7 +108,13 @@ export function ProjectDialog({ project, projects, onClose, onSaved }: Props) {
         </select>
       </Field>
       <label className="pp-check">
-        <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
+        <input
+          type="checkbox"
+          id="edit-project-active"
+          name="active"
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
+        />
         Active
       </label>
       <ErrorText error={error} />

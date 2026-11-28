@@ -308,12 +308,14 @@ export function TimelineView({ timelineId }: { timelineId: string }) {
     <div className="pp-panel pp-timeline" ref={setNodeRef}>
       <div className="pp-toolbar">
         <input
+          name="timelineName"
           className="pp-title-input"
           defaultValue={timeline.name}
           onBlur={(e) => e.target.value !== timeline.name && save(() => ({ name: e.target.value }))}
           aria-label="Timeline title"
         />
         <input
+          name="timelineStart"
           type="date"
           value={toDateInputValue(timeline.start)}
           onChange={(e) =>
@@ -322,6 +324,7 @@ export function TimelineView({ timelineId }: { timelineId: string }) {
           aria-label="Start"
         />
         <input
+          name="timelineEnd"
           type="date"
           value={toDateInputValue(timeline.end)}
           onChange={(e) =>
@@ -330,6 +333,7 @@ export function TimelineView({ timelineId }: { timelineId: string }) {
           aria-label="End"
         />
         <select
+          name="timelineScale"
           value={timeline.scale}
           onChange={(e) => save(() => ({ scale: e.target.value as Granularity }))}
           aria-label="Scale"
@@ -339,7 +343,12 @@ export function TimelineView({ timelineId }: { timelineId: string }) {
           ))}
         </select>
         <span className="pp-spacer" />
-        <input placeholder="New row" value={newRow} onChange={(e) => setNewRow(e.target.value)} />
+        <input
+          name="newRowName"
+          placeholder="New row"
+          value={newRow}
+          onChange={(e) => setNewRow(e.target.value)}
+        />
         <button
           type="button"
           disabled={!newRow}

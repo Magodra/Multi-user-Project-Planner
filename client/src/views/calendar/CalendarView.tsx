@@ -88,6 +88,8 @@ export function CalendarView({ planIds: initial }: { planIds: string[] }) {
           <label key={p.id} className="pp-check">
             <input
               type="checkbox"
+              name="calendarPlans"
+              value={p.id}
               checked={planIds.includes(p.id)}
               onChange={() =>
                 setPlanIds((ids) =>

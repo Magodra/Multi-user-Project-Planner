@@ -67,13 +67,15 @@ function NewReportForm({ onCreated }: { onCreated(): void }) {
       }}
     >
       <Field label="Report name">
-        <input value={name} onChange={(e) => setName(e.target.value)} required />
+        <input name="reportName" value={name} onChange={(e) => setName(e.target.value)} required />
       </Field>
       <fieldset>
         <legend>Plans</legend>
         {plans.map((p) => (
           <label key={p.id} className="pp-check">
             <input
+              name="reportPlans"
+              value={p.id}
               type="checkbox"
               checked={planIds.includes(p.id)}
               onChange={() => void togglePlan(p.id)}
@@ -88,6 +90,8 @@ function NewReportForm({ onCreated }: { onCreated(): void }) {
           {baselines.map((b) => (
             <label key={b.id} className="pp-check">
               <input
+                name="reportBaselines"
+                value={b.id}
                 type="checkbox"
                 checked={baselineIds.includes(b.id)}
                 onChange={() => toggle(baselineIds, setBaselineIds, b.id)}
@@ -103,6 +107,8 @@ function NewReportForm({ onCreated }: { onCreated(): void }) {
           {timelines!.map((t) => (
             <label key={t.id} className="pp-check">
               <input
+                name="reportTimelines"
+                value={t.id}
                 type="checkbox"
                 checked={timelineIds.includes(t.id)}
                 onChange={() => toggle(timelineIds, setTimelineIds, t.id)}
@@ -114,13 +120,24 @@ function NewReportForm({ onCreated }: { onCreated(): void }) {
       )}
       <div className="pp-row">
         <Field label="From">
-          <input type="date" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+          <input
+            name="reportFrom"
+            type="date"
+            value={rangeStart}
+            onChange={(e) => setRangeStart(e.target.value)}
+          />
         </Field>
         <Field label="To">
-          <input type="date" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
+          <input
+            name="reportTo"
+            type="date"
+            value={rangeEnd}
+            onChange={(e) => setRangeEnd(e.target.value)}
+          />
         </Field>
         <Field label="Granularity">
           <select
+            name="reportGranularity"
             value={granularity}
             onChange={(e) => setGranularity(e.target.value as Granularity)}
           >
@@ -130,7 +147,11 @@ function NewReportForm({ onCreated }: { onCreated(): void }) {
           </select>
         </Field>
         <Field label="Name contains">
-          <input value={nameContains} onChange={(e) => setNameContains(e.target.value)} />
+          <input
+            name="reportNameContains"
+            value={nameContains}
+            onChange={(e) => setNameContains(e.target.value)}
+          />
         </Field>
       </div>
       <ErrorText error={error} />

@@ -474,6 +474,7 @@ export function GanttView({ planId }: { planId: string }) {
         <label>
           Scale{" "}
           <select
+            name="ganttScale"
             value={scale.unit}
             onChange={(e) => setScale(defaultScale(e.target.value as ScaleUnit))}
           >
@@ -519,6 +520,8 @@ export function GanttView({ planId }: { planId: string }) {
               <label key={b.id} className="pp-check">
                 <input
                   type="checkbox"
+                  name="baselineOverlay"
+                  value={b.id}
                   checked={selectedIds.includes(b.id)}
                   onChange={() => toggleOverlay(b.id)}
                 />

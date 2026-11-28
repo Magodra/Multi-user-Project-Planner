@@ -4,6 +4,39 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 const API = "http://localhost:8181";
 const PASSWORD = "e2e-password";
 
+/**
+ * Every form field needs an id or name (browsers warn otherwise). A MutationObserver
+ * records fields without either for the whole test, so fields in dialogs that are
+ * opened and closed again are checked too.
+ */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const found = new Set<string>();
+    (window as unknown as { __unnamedFields: Set<string> }).__unnamedFields = found;
+    const check = (root: ParentNode) => {
+      for (const el of root.querySelectorAll<HTMLElement>("input, select, textarea")) {
+        if (!el.id && !el.getAttribute("name")) {
+          const label = el.closest("label")?.textContent?.trim();
+          found.add(label || el.getAttribute("aria-label") || el.outerHTML.slice(0, 80));
+        }
+      }
+    };
+    new MutationObserver(() => check(document)).observe(document, {
+      childList: true,
+      subtree: true,
+    });
+  });
+});
+
+test.afterEach(async ({ page }) => {
+  const unnamed = await page
+    .evaluate(() => [
+      ...((window as unknown as { __unnamedFields?: Set<string> }).__unnamedFields ?? []),
+    ])
+    .catch(() => []);
+  expect(unnamed, "form fields without id or name").toEqual([]);
+});
+
 /** The first run creates the administrator; later runs (other mode) log in. */
 async function signIn(page: Page) {
   await page.goto("");

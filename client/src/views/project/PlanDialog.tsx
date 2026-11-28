@@ -77,10 +77,16 @@ export function PlanDialog({
         <p className="pp-hint">Only the plan's owners and project admins can change it.</p>
       )}
       <Field label="Name">
-        <input value={name} onChange={(e) => setName(e.target.value)} disabled={!canManage} />
+        <input
+          name="planName"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          disabled={!canManage}
+        />
       </Field>
       <Field label="Plan type">
         <input
+          name="planType"
           value={planType}
           onChange={(e) => setPlanType(e.target.value)}
           disabled={!canManage}
@@ -89,6 +95,7 @@ export function PlanDialog({
       </Field>
       <Field label="Description">
         <textarea
+          name="planDescription"
           rows={3}
           value={description}
           onChange={(e) => setDescription(e.target.value)}

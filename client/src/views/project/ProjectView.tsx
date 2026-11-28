@@ -43,11 +43,13 @@ export function ProjectView() {
           }}
         >
           <input
+            name="newPlanName"
             placeholder="Plan name"
             value={planName}
             onChange={(e) => setPlanName(e.target.value)}
           />
           <input
+            name="newPlanType"
             placeholder="Type (contract, internal, …)"
             value={planType}
             onChange={(e) => setPlanType(e.target.value)}
@@ -84,6 +86,7 @@ export function ProjectView() {
         <div className="pp-row">
           <Field label="User">
             <select
+              name="memberUserId"
               value={member.userId}
               onChange={(e) => setMember({ ...member, userId: e.target.value })}
             >
@@ -97,6 +100,7 @@ export function ProjectView() {
           </Field>
           <Field label="Plan">
             <select
+              name="memberPlanId"
               value={member.planId}
               onChange={(e) => setMember({ ...member, planId: e.target.value })}
             >
@@ -110,6 +114,7 @@ export function ProjectView() {
           </Field>
           <Field label="Role">
             <select
+              name="memberRole"
               value={member.role}
               onChange={(e) => setMember({ ...member, role: e.target.value as Role })}
             >

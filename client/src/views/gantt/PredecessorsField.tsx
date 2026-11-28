@@ -19,6 +19,7 @@ export function PredecessorsField({
     <>
       <Field label="Predecessors">
         <input
+          name="predecessors"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}

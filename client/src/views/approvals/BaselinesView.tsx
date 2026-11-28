@@ -137,6 +137,7 @@ export function BaselinesView({ planId }: { planId: string }) {
         <h3>Baselines</h3>
         <div className="pp-row">
           <input
+            name="snapshotName"
             placeholder="Snapshot name"
             value={snapshotName}
             onChange={(e) => setSnapshotName(e.target.value)}
@@ -209,6 +210,8 @@ export function BaselinesView({ planId }: { planId: string }) {
             <label key={o.key} className="pp-check">
               <input
                 type="checkbox"
+                name="compareWith"
+                value={o.key}
                 checked={compareWith.includes(o.key)}
                 onChange={() =>
                   setCompareWith((c) =>

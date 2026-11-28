@@ -109,6 +109,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
   const dateInput =
     granularity === "hours" ? (
       <input
+        name="taskStart"
         type="datetime-local"
         value={toDateTimeInputValue(start)}
         onChange={(e) => e.target.value && setStart(fromDateTimeInputValue(e.target.value))}
@@ -116,6 +117,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
       />
     ) : (
       <input
+        name="taskStart"
         type="date"
         value={toDateInputValue(start)}
         onChange={(e) => e.target.value && setStart(fromDateInputValue(e.target.value))}
@@ -159,6 +161,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
       <div hidden={tab !== "details"}>
         <Field label="Name">
           <input
+            name="taskName"
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={!canEdit}
@@ -169,6 +172,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
           <Field label={granularity === "hours" ? "Start (UTC)" : "Start"}>{dateInput}</Field>
           <Field label="Duration">
             <input
+              name="taskDuration"
               type="number"
               min={0}
               step={granularity === "hours" ? 0.5 : 1}
@@ -179,6 +183,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
           </Field>
           <Field label="Unit">
             <select
+              name="taskGranularity"
               value={granularity}
               onChange={(e) => setGranularity(e.target.value as Granularity)}
               disabled={!canEdit || kind === "activity"}
@@ -203,7 +208,12 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
               {approvers.map((r) => r.planName).join(", ")} approve.
             </p>
             <Field label="Reason for the change">
-              <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+              <textarea
+                name="changeReason"
+                rows={2}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
             </Field>
           </>
         )}
@@ -213,6 +223,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
         <div className="pp-row">
           <Field label="Parent">
             <select
+              name="taskParentId"
               value={parentId ?? ""}
               onChange={(e) => setParentId(e.target.value || null)}
               disabled={!canEdit}
@@ -227,6 +238,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
           </Field>
           <Field label="Ownership">
             <select
+              name="taskOwnership"
               value={ownership}
               onChange={(e) => setOwnership(e.target.value as Task["ownership"])}
               disabled={!canEdit || usedIn.length > 0}
@@ -238,6 +250,7 @@ export function ItemDialog({ view, item, defaultParentId = null, onClose }: Prop
         </div>
         <Field label="Notes">
           <textarea
+            name="taskNotes"
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
